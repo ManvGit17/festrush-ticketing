@@ -1,0 +1,10 @@
+# Dependency versions the original lab code ran on. The characterization suite pins the v1
+# behaviour, so it must run against these: on current Starlette the v1 templates fail outright
+# (the old TemplateResponse(name, {"request": ...}) form was removed), which is audit finding A1.
+fastapi==0.115.6
+starlette==0.41.3
+uvicorn==0.34.0
+jinja2==3.1.5
+python-multipart==0.0.20
+httpx==0.28.1
+pytest==8.3.4
