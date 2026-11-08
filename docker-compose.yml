@@ -1,0 +1,53 @@
+# One command:  docker compose up
+#
+#   db     PostgreSQL 18
+#   setup  applies migrations and loads the demo events and accounts, then exits
+#   app    the web app on http://localhost:8080
+#
+# Copy .env.example to .env to change ports or passwords.
+
+name: festrush
+
+x-app: &app
+  build: .
+  image: festrush-app:local
+  environment:
+    FESTRUSH_DATABASE_URL: postgresql://festrush:${POSTGRES_PASSWORD:-festrush-dev}@db:5432/festrush
+    FESTRUSH_SECRET_KEY: ${FESTRUSH_SECRET_KEY:-local-development-only-secret-change-me}
+    FESTRUSH_DEMO_PASSWORD: ${FESTRUSH_DEMO_PASSWORD:-festrush-demo}
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: festrush
+      POSTGRES_USER: festrush
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-festrush-dev}
+    ports:
+      - "${POSTGRES_PORT:-5440}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U festrush -d festrush"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  setup:
+    <<: *app
+    command: ["sh", "-c", "festrush migrate && festrush seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    <<: *app
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
