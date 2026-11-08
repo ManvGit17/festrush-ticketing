@@ -2,12 +2,12 @@
 
 These tests pin the behaviour of the original monolith (v1: GitHub main plus the lab edits,
 commit b9aeaa2), which now lives unchanged in ``legacy/v1``, exactly as it is, bugs included.
-A test marked ``BUG`` documents a defect from docs/audit.md. The rebuilt app has its own tests for each fixed finding; this suite
-stays as the record of what v1 did and runs against the dependency versions v1 was written for
-(``requirements-legacy.txt``), with ``pytest -m legacy``.
+A test marked ``BUG`` documents a defect from docs/audit.md. The rebuilt app has its own tests
+for each fixed finding; this suite stays as the record of what v1 did and runs against the
+dependency versions v1 was written for (``requirements-legacy.txt``), with ``pytest -m legacy``.
 
 The app hard-codes ``sqlite3.connect("fest.db")`` and imports ``get_db`` by name, so each test
-points those names at a throwaway database instead of touching the committed file.
+points those names at a throwaway database instead of touching a real database file.
 """
 
 import sqlite3
