@@ -64,9 +64,7 @@ def main(base: str) -> None:
     # because the bare ``except:`` reports every database error (for example "database is locked")
     # as a duplicate username.
     def signup(i: int) -> str:
-        status, body = call(
-            f"{base}/register", {"username": f"probe_{i}", "password": "pw"}
-        )
+        status, body = call(f"{base}/register", {"username": f"probe_{i}", "password": "pw"})
         return "created" if status == 302 else body[:60]
 
     answers = burst(200, signup)
