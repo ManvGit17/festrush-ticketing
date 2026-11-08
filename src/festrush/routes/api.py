@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
-from festrush import inventory, orders, services, waitingroom
+from festrush import inventory, orders, services, waitingroom, worker
 from festrush.deps import client_id, connection, state
 from festrush.idempotency import MAX_KEY_LENGTH, Replayable, request_hash, run_idempotent
 from festrush.inventory import Outcome
@@ -234,7 +234,7 @@ def pay_order(request: Request, order_id: int, user: CurrentUser) -> dict[str, A
     with connection(request) as conn:
         if orders.get_order(conn, order_id, user["id"]) is None:
             raise HTTPException(status_code=404, detail="no such order")
-    orders.run_payment(st.pool, st.provider, order_id)
+    orders.run_payment(st.pool, st.provider, order_id, worker.inline_notifier(st.settings))
     with connection(request) as conn:
         order = orders.get_order(conn, order_id, user["id"])
     assert order is not None

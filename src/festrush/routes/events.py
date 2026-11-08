@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from starlette.responses import RedirectResponse, Response
 
-from festrush import inventory, orders, services, waitingroom
+from festrush import inventory, orders, services, waitingroom, worker
 from festrush.deps import connection, current_user, render, require_user, state, verify_csrf
 from festrush.idempotency import request_hash, run_idempotent
 from festrush.inventory import Outcome
@@ -103,7 +103,7 @@ def pay(request: Request, idempotency_key: str = Form("")) -> Response:
     order_id = result.body.get("order_id")
     if not order_id:
         return RedirectResponse("/my-events?notice=nothing", status_code=303)
-    orders.run_payment(st.pool, st.provider, int(order_id))
+    orders.run_payment(st.pool, st.provider, int(order_id), worker.inline_notifier(st.settings))
     return RedirectResponse(f"/orders/{order_id}", status_code=303)
 
 

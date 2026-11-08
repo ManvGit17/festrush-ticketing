@@ -62,6 +62,19 @@ HANDLERS: dict[str, Callable[[Conn, dict[str, Any]], None]] = {
 }
 
 
+def inline_notifier(settings: Settings) -> orders.Notifier | None:
+    """The confirmation sent inside the payment request (experiment E3), or None for the outbox."""
+    if not settings.notify_inline:
+        return None
+
+    def send(conn: Conn, payload: dict[str, Any]) -> None:
+        _confirmation(conn, payload)
+        if settings.worker_handler_delay_ms:
+            time.sleep(settings.worker_handler_delay_ms / 1000)  # the email provider's latency
+
+    return send
+
+
 def process_outbox(pool: Pool, settings: Settings, limit: int = 50) -> int:
     """Deliver pending outbox events. Returns how many were handled (successfully or not)."""
     handled = 0

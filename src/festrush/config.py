@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     mockpay_decline_rate: float = Field(default=0.0, ge=0, le=1)
     mockpay_timeout_rate: float = Field(default=0.0, ge=0, le=1)
 
+    # Experiment E3 (docs/architecture.md): send the confirmation inside the payment request
+    # instead of through the outbox. Slower and less safe; kept so the cost can be measured.
+    notify_inline: bool = False
+
     worker_poll_ms: int = Field(default=200, ge=10)
     worker_handler_delay_ms: int = Field(default=0, ge=0)  # test hook: widen the crash window
     outbox_max_attempts: int = Field(default=8, ge=1)
