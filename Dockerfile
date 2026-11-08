@@ -16,6 +16,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # --- bench: the app plus the load-test tooling, for `docker compose --profile bench run bench` -----
 FROM python:3.13-slim AS bench
+RUN apt-get update && apt-get install -y --no-install-recommends nginx-light \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never PYTHONUNBUFFERED=1
 WORKDIR /app
@@ -25,6 +27,9 @@ COPY src ./src
 COPY db ./db
 COPY main.py ./main.py
 COPY bench ./bench
+COPY gateway ./gateway
+# k6, a compiled load generator, to tell the application's limits from Locust's.
+COPY --from=grafana/k6:2.3.0 /usr/bin/k6 /usr/local/bin/k6
 RUN --mount=type=cache,target=/root/.cache/uv     uv sync --frozen
 ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT ["python", "bench/run.py"]

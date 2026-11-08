@@ -50,17 +50,33 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--strategy", choices=["naive", "row_lock", "atomic_update", "skip_locked"], required=True)
     p.add_argument("--scenario", choices=["spike", "retry-storm", "soak"], default="spike")
     p.add_argument("--users", type=int, default=300, help="simulated students")
+    p.add_argument(
+        "--driver",
+        choices=["locust", "k6"],
+        default="locust",
+        help="load generator. k6 is a compiled tool with a much higher ceiling than Locust",
+    )
     p.add_argument("--seats", type=int, default=30, help="seats at the event (soak: per event)")
     p.add_argument("--events", type=int, default=1, help="number of events (soak only)")
     p.add_argument("--duration", type=int, default=60, help="seconds (soak only)")
     p.add_argument("--web-workers", type=int, default=4, help="web server processes")
     p.add_argument("--pool-size", type=int, default=10, help="database connections per web process")
+    p.add_argument("--threads", type=int, default=40, help="handler threads per web process")
     p.add_argument("--spawn-rate", type=int, default=0, help="users started per second (0 = all at once)")
     p.add_argument("--naive-delay-ms", type=int, default=0, help="widen the naive strategy's race window")
     p.add_argument("--mockpay-latency-ms", type=int, default=0)
     p.add_argument("--mockpay-decline-rate", type=float, default=0.0)
     p.add_argument("--mockpay-timeout-rate", type=float, default=0.0)
     p.add_argument("--hold-minutes", type=int, default=10)
+    p.add_argument("--gateway", action="store_true", help="put the nginx gateway in front of the app")
+    p.add_argument("--claim-rate", type=int, default=300, help="gateway: seat claims per second let through")
+    p.add_argument("--claim-burst", type=int, default=200, help="gateway: extra claims allowed at once")
+    p.add_argument("--queue-rate", type=int, default=600, help="gateway: queue joins and polls per second")
+    p.add_argument("--catalog-ttl", type=int, default=1, help="gateway: seconds to cache event reads")
+    p.add_argument("--gateway-port", type=int, default=8091)
+    p.add_argument("--waiting-room", action="store_true", help="students join the queue before reserving")
+    p.add_argument("--admit-per-second", type=int, default=150, help="waiting room admission rate")
+    p.add_argument("--queue-mode", choices=["fifo", "lottery"], default="fifo")
     p.add_argument(
         "--synchronous-commit",
         choices=["on", "off"],
@@ -123,6 +139,10 @@ def child_env(args: argparse.Namespace) -> dict[str, str]:
         "FESTRUSH_SECRET_KEY": "benchmark-secret-key-0000",
         "FESTRUSH_INVENTORY_STRATEGY": args.strategy,
         "FESTRUSH_NAIVE_DELAY_MS": str(args.naive_delay_ms),
+        "FESTRUSH_THREADPOOL_SIZE": str(args.threads),
+        "FESTRUSH_WAITING_ROOM_ENABLED": "true" if args.waiting_room else "false",
+        "FESTRUSH_WAITING_ROOM_MODE": args.queue_mode,
+        "FESTRUSH_WAITING_ROOM_ADMIT_PER_SECOND": str(args.admit_per_second),
         "FESTRUSH_POOL_MIN_SIZE": "2",
         "FESTRUSH_POOL_MAX_SIZE": str(args.pool_size),
         "FESTRUSH_HOLD_MINUTES": str(args.hold_minutes),
@@ -149,6 +169,26 @@ def stop(proc: subprocess.Popen[Any]) -> None:
         proc.kill()
 
 
+def start_gateway(args: argparse.Namespace) -> subprocess.Popen[Any]:
+    """Start nginx from the same template docker compose uses, pointed at the benchmark app."""
+    text = (REPO_ROOT / "gateway" / "nginx.conf.template").read_text(encoding="utf-8")
+    for name, value in {
+        "UPSTREAM": f"127.0.0.1:{args.port}",
+        "LISTEN_PORT": str(args.gateway_port),
+        "CLAIM_RATE": str(args.claim_rate),
+        "CLAIM_BURST": str(args.claim_burst),
+        "QUEUE_RATE": str(args.queue_rate),
+        "QUEUE_BURST": str(args.queue_rate),
+        "LOGIN_RATE": "100000",
+        "LOGIN_BURST": "100000",
+        "CATALOG_TTL": str(args.catalog_ttl),
+    }.items():
+        text = text.replace("${" + name + "}", value)
+    conf = Path(tempfile.mkdtemp()) / "nginx.conf"
+    conf.write_text(text, encoding="utf-8")
+    return subprocess.Popen(["nginx", "-c", str(conf), "-g", "daemon off;"], stdout=subprocess.DEVNULL)
+
+
 def wait_until_up(port: int, proc: subprocess.Popen[Any]) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -164,6 +204,92 @@ def wait_until_up(port: int, proc: subprocess.Popen[Any]) -> None:
 
 
 # --- Measuring --------------------------------------------------------------------------------
+
+
+K6_NAMES = {
+    "reserve": "POST /api/events/[id]/reserve",
+    "order": "POST /api/orders",
+    "pay": "POST /api/orders/[id]/pay",
+    "queue_join": "POST /api/queue/join",
+    "queue_wait": "GET /api/queue/status",
+}
+
+
+def run_k6(
+    args: argparse.Namespace, env: dict[str, str], event_ids: str, cap: int
+) -> tuple[dict[str, Any], float]:
+    """Run the spike with k6 and return statistics in the same shape the Locust path produces."""
+    with tempfile.TemporaryDirectory() as tmp:
+        summary = Path(tmp) / "summary.json"
+        cmd = [
+            "k6",
+            "run",
+            "--quiet",
+            "--summary-export",
+            str(summary),
+            str(REPO_ROOT / "bench" / "k6" / "spike.js"),
+        ]
+        k6_env = {
+            **env,
+            "TARGET": f"http://127.0.0.1:{args.gateway_port if args.gateway else args.port}",
+            "USERS": str(args.users),
+            "SCENARIO": args.scenario,
+            "WAITING_ROOM": "1" if args.waiting_room else "0",
+            "MAX_DURATION": f"{cap}s",
+            "EVENT_ID": event_ids.split(",")[0],
+        }
+        t0 = time.monotonic()
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=k6_env, capture_output=True, text=True, check=False)
+        seconds = time.monotonic() - t0
+        if not summary.exists():
+            sys.stderr.write(proc.stdout[-3000:] + proc.stderr[-3000:])
+            raise SystemExit("k6 produced no summary")
+        metrics = json.loads(summary.read_text(encoding="utf-8"))["metrics"]
+
+    def values(name: str) -> dict[str, Any]:
+        m = metrics.get(name, {})
+        return m.get("values", m)
+
+    stats: dict[str, Any] = {}
+    total = failures = 0
+    for tag, label in K6_NAMES.items():
+        count = int(values(f"http_reqs{{name:{tag}}}").get("count", 0))
+        if not count:
+            continue
+        d = values(f"http_req_duration{{name:{tag}}}")
+        stats[label] = {
+            "requests": count,
+            "failures": 0,
+            "avg_ms": round(d.get("avg", 0), 1),
+            "p50_ms": round(d.get("med", 0), 1),
+            "p95_ms": round(d.get("p(95)", 0), 1),
+            "p99_ms": round(d.get("p(99)", 0), 1),
+            "max_ms": round(d.get("max", 0), 1),
+            "rps": round(count / seconds, 1),
+        }
+        total += count
+    failed_rate = values("http_req_failed").get("rate", values("http_req_failed").get("value", 0))
+    failures = round(failed_rate * int(values("http_reqs").get("count", total)))
+    allreqs = int(values("http_reqs").get("count", total))
+    d = values("http_req_duration")
+    stats["Aggregated"] = {
+        "requests": allreqs,
+        "failures": failures,
+        "avg_ms": round(d.get("avg", 0), 1),
+        "p50_ms": round(d.get("med", 0), 1),
+        "p95_ms": round(d.get("p(95)", 0), 1),
+        "p99_ms": round(d.get("p(99)", 0), 1),
+        "max_ms": round(d.get("max", 0), 1),
+        "rps": round(allreqs / seconds, 1),
+    }
+    stats["_errors"] = {}
+    journey = values("reserve_journey_ms")
+    stats["_extra"] = {
+        "shed_429": int(values("shed_429").get("count", 0)),
+        "reserve_journey_p50_ms": round(journey.get("med", 0), 1),
+        "reserve_journey_p95_ms": round(journey.get("p(95)", 0), 1),
+    }
+    return stats, seconds
 
 
 def settle(args: argparse.Namespace, deadline_s: int = 90) -> bool:
@@ -256,51 +382,61 @@ def main() -> int:
         [sys.executable, "-m", "festrush", "worker"], cwd=REPO_ROOT, env=env, stdout=subprocess.DEVNULL
     )
     started = datetime.now(UTC)
+    gateway = None
     try:
         wait_until_up(args.port, web)
-        with tempfile.TemporaryDirectory() as tmp:
-            stats_file = Path(tmp) / "stats.json"
-            # A spike that has not finished by now is stuck, not slow: fail it instead of waiting.
-            cap = args.duration if args.scenario == "soak" else 120
-            cmd = [
-                sys.executable,
-                "-m",
-                "locust",
-                "-f",
-                str(REPO_ROOT / "bench" / "locustfile.py"),
-                "--host",
-                f"http://127.0.0.1:{args.port}",
-                "--headless",
-                "--users",
-                str(args.users),
-                "--spawn-rate",
-                str(args.spawn_rate or args.users),
-                "--run-time",
-                f"{cap}s",
-                "--only-summary",
-            ]
-            t0 = time.monotonic()
-            locust = subprocess.run(
-                cmd,
-                cwd=REPO_ROOT,
-                env={
-                    **env,
-                    "BENCH_SCENARIO": args.scenario,
-                    "BENCH_USERS": str(args.users),
-                    "BENCH_EVENT_IDS": event_ids,
-                    "BENCH_STATS_OUT": str(stats_file),
-                },
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            load_seconds = time.monotonic() - t0
-            if not stats_file.exists():
-                sys.stderr.write(locust.stdout[-3000:] + locust.stderr[-3000:])
-                raise SystemExit("locust produced no statistics")
-            locust_stats = json.loads(stats_file.read_text(encoding="utf-8"))
+        if args.gateway:
+            gateway = start_gateway(args)
+            wait_until_up(args.gateway_port, gateway)
+        cap = args.duration if args.scenario == "soak" else 120
+        if args.driver == "k6":
+            locust_stats, load_seconds = run_k6(args, env, event_ids, cap)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                stats_file = Path(tmp) / "stats.json"
+                # A spike that has not finished by now is stuck, not slow: fail it instead of waiting.
+                cap = args.duration if args.scenario == "soak" else 120
+                cmd = [
+                    sys.executable,
+                    "-m",
+                    "locust",
+                    "-f",
+                    str(REPO_ROOT / "bench" / "locustfile.py"),
+                    "--host",
+                    f"http://127.0.0.1:{args.gateway_port if args.gateway else args.port}",
+                    "--headless",
+                    "--users",
+                    str(args.users),
+                    "--spawn-rate",
+                    str(args.spawn_rate or args.users),
+                    "--run-time",
+                    f"{cap}s",
+                    "--only-summary",
+                ]
+                t0 = time.monotonic()
+                locust = subprocess.run(
+                    cmd,
+                    cwd=REPO_ROOT,
+                    env={
+                        **env,
+                        "BENCH_SCENARIO": args.scenario,
+                        "BENCH_USERS": str(args.users),
+                        "BENCH_EVENT_IDS": event_ids,
+                        "BENCH_STATS_OUT": str(stats_file),
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                load_seconds = time.monotonic() - t0
+                if not stats_file.exists():
+                    sys.stderr.write(locust.stdout[-3000:] + locust.stderr[-3000:])
+                    raise SystemExit("locust produced no statistics")
+                locust_stats = json.loads(stats_file.read_text(encoding="utf-8"))
         settled = settle(args)
     finally:
+        if gateway is not None:
+            stop(gateway)
         stop(background)
         stop(web)
 
@@ -360,6 +496,12 @@ def print_summary(r: dict[str, Any]) -> None:
     print(
         f"  reservations {res}  orders {db['orders']}  payments {db['payments']}  messages {db['messages']}"
     )
+    extra = r["locust"].get("_extra")
+    if extra:
+        print(
+            f"  student view of reserve (first attempt to answer): p50 {extra['reserve_journey_p50_ms']} ms, "
+            f"p95 {extra['reserve_journey_p95_ms']} ms; shed with 429: {extra['shed_429']}"
+        )
     print(f"  OVERSOLD SEATS: {db['oversold_seats']}   violated invariants: {db['violations'] or 'none'}")
 
 

@@ -1,0 +1,100 @@
+{
+  "commit": "unknown",
+  "database": {
+    "charges": {
+      "n": 200,
+      "refunded": 0
+    },
+    "messages": 200,
+    "orders": {
+      "confirmed": 200
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "succeeded": 200
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 200
+    },
+    "violations": {}
+  },
+  "label": "k6-w4-t10",
+  "load_seconds": 25.27,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 12386.3,
+      "failures": 0,
+      "max_ms": 22637.0,
+      "p50_ms": 12636.6,
+      "p95_ms": 21025.6,
+      "p99_ms": 22242.8,
+      "requests": 5400,
+      "rps": 213.7
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 12569.8,
+      "failures": 0,
+      "max_ms": 22637.0,
+      "p50_ms": 12654.8,
+      "p95_ms": 21130.2,
+      "p99_ms": 22262.3,
+      "requests": 5000,
+      "rps": 197.9
+    },
+    "POST /api/orders": {
+      "avg_ms": 15296.2,
+      "failures": 0,
+      "max_ms": 19084.0,
+      "p50_ms": 15191.4,
+      "p95_ms": 18779.5,
+      "p99_ms": 18963.2,
+      "requests": 200,
+      "rps": 7.9
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 4888.6,
+      "failures": 0,
+      "max_ms": 22140.0,
+      "p50_ms": 4939.0,
+      "p95_ms": 10582.1,
+      "p99_ms": 20680.6,
+      "requests": 200,
+      "rps": 7.9
+    },
+    "_errors": {}
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "driver": "k6",
+    "duration": 60,
+    "events": 1,
+    "expect_oversell": false,
+    "hold_minutes": 10,
+    "label": "k6-w4-t10",
+    "mockpay_decline_rate": 0.0,
+    "mockpay_latency_ms": 0,
+    "mockpay_timeout_rate": 0.0,
+    "naive_delay_ms": 0,
+    "pool_size": 10,
+    "port": 8090,
+    "scenario": "spike",
+    "seats": 200,
+    "spawn_rate": 0,
+    "strategy": "atomic_update",
+    "synchronous_commit": "on",
+    "threads": 10,
+    "users": 5000,
+    "waiting_room": false,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T04:25:54+00:00"
+}
