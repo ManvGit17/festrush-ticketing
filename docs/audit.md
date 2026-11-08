@@ -151,3 +151,40 @@ rebuilt app; the rebuild's benchmarks will come from the load-test scripts added
    `/events`, `/register_event/{id}`, `/my-events`, `/checkout` routes, a monolithic structure) are
    listed as questions in [roadmap.md](roadmap.md#decisions-needed) and are kept working until
    answered.
+
+## 8. Resolution status
+
+Updated at the end of each phase. "Test" names the test that proves the fix; v1's behaviour stays
+pinned in `tests/characterization/` against `legacy/v1/`.
+
+### After phase 1 (foundation)
+
+| # | Status | How |
+| :-- | :-- | :-- |
+| S1 | Fixed | Argon2id hashes (`test_password_is_hashed_with_argon2id`) |
+| S2 | Fixed | Server-side sessions, `POST` for writes, CSRF tokens, `?user=` ignored (`test_anonymous_visitors_are_sent_to_sign_in_not_to_a_registration`, `test_the_user_query_parameter_no_longer_means_anything`) |
+| S3 | **Open, your call** | The SRN is still at `main.py` line 8-ish, untouched, until you decide. The username/password row is gone from the working tree, but still exists in git history (history is not rewritten) |
+| S4 | Fixed | `fest.db` removed from the tree and `*.db` ignored. The file remains in history at `fe966d8` |
+| S5 | Fixed | Error pages show a request ID, never exception text (`test_errors_do_not_show_exception_text`) |
+| S6 | Fixed | Username and password rules (`test_empty_and_malformed_credentials_are_rejected`) |
+| S7 | Partly fixed | Login throttling per (username, client), CSRF and security headers are in. Sign-up still says when a username is taken, which is a usability trade-off |
+| S8 | Fixed | No third-party requests; strict CSP (`test_pages_make_no_third_party_requests`) |
+| A1 | Fixed | Locked dependencies, tested on current FastAPI and Starlette, Python 3.13 |
+| A2 | Fixed | No bare `except`; the duplicate-user case is an `ON CONFLICT` clause |
+| A3 | Fixed | Checkout totals the signed-in user's events only (`test_checkout_totals_only_my_events`) |
+| A4 | Fixed | Unique `(user_id, event_id)` (`test_registering_twice_is_harmless`, `test_a_double_click_storm_registers_once`) |
+| A5 | Fixed | Foreign keys and a 404 (`test_registering_for_a_missing_event_is_a_404`) |
+| A6 | Fixed for registration | Capacity column, `CHECK` constraint and an atomic conditional `UPDATE` (`test_a_rush_for_a_few_seats_never_oversells`). Phase 2 compares this with the other strategies under load |
+| A7 | Fixed | The crash route exists only with `FESTRUSH_DEBUG=true` |
+| A8 | Fixed | Idempotent seed (`test_seeding_twice_does_not_duplicate_events`) |
+| A9 | Fixed | Slow-code leftovers are gone from the app; they remain only in the archived `legacy/v1/` |
+| A10 | Fixed | One new account per simulated user, host documented, the four files keep their paths |
+| A11 | Fixed | Pooled connections used as context managers; no relative database path |
+| A12 | Fixed | Numbered migrations and one runner |
+| A13 | Fixed | `POST /logout` deletes the session (`test_logout_ends_the_session`) |
+| A14 | Fixed | The username no longer appears in URLs |
+| A15 | Fixed | Lab instructions removed from the UI |
+| D1 | Fixed | Keys, foreign keys, uniqueness, capacity (`test_the_database_refuses_orphans_and_duplicates`) |
+| D2 | Open (low) | Fees stay whole rupees as an integer; documented in the schema |
+| D3 | Fixed | The committed database is gone |
+| H1-H5 | Fixed | README, MIT license, tests, lint, types, CI and Dependabot, `locust` moved to dev dependencies, `.gitignore` extended |
