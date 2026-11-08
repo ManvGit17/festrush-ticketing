@@ -35,12 +35,14 @@ def test_startup_creates_the_three_tables(client: TestClient, connect: Connect) 
 
 def test_registrations_have_no_keys_or_constraints(client: TestClient, connect: Connect) -> None:
     # BUG (D1, A6): no primary key, no foreign keys, no uniqueness, no capacity column.
-    sql = connect().execute(
-        "SELECT sql FROM sqlite_master WHERE name='registrations'"
-    ).fetchone()[0]
+    sql = (
+        connect().execute("SELECT sql FROM sqlite_master WHERE name='registrations'").fetchone()[0]
+    )
     assert "PRIMARY KEY" not in sql.upper()
     assert "REFERENCES" not in sql.upper()
-    events_sql = connect().execute("SELECT sql FROM sqlite_master WHERE name='events'").fetchone()[0]
+    events_sql = (
+        connect().execute("SELECT sql FROM sqlite_master WHERE name='events'").fetchone()[0]
+    )
     assert "capacity" not in events_sql.lower() and "seats" not in events_sql.lower()
 
 
@@ -100,9 +102,7 @@ def test_empty_username_and_password_create_an_account(
     # BUG (S6): no validation. On the dependency versions the lab was written against, empty
     # strings satisfy ``Form(...)``, so an account with a blank name and password is created.
     # (Newer FastAPI releases answer 422 here, which would hide the problem.)
-    r = client.post(
-        "/register", data={"username": "", "password": ""}, follow_redirects=False
-    )
+    r = client.post("/register", data={"username": "", "password": ""}, follow_redirects=False)
     assert r.status_code == 302
     assert connect().execute("SELECT username, password FROM users").fetchall()[0][:] == ("", "")
 
@@ -154,9 +154,11 @@ def test_repeated_registration_creates_duplicate_rows(client: TestClient, connec
     # BUG (A4): a double click or a retry registers twice.
     for _ in range(3):
         client.get("/register_event/2", params={"user": "asha"}, follow_redirects=False)
-    n = connect().execute(
-        "SELECT COUNT(*) FROM registrations WHERE username='asha' AND event_id=2"
-    ).fetchone()[0]
+    n = (
+        connect()
+        .execute("SELECT COUNT(*) FROM registrations WHERE username='asha' AND event_id=2")
+        .fetchone()[0]
+    )
     assert n == 3
     r = client.get("/my-events", params={"user": "asha"})
     assert r.text.count("Dance Battle") == 3
