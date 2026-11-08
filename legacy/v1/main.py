@@ -5,7 +5,6 @@ from database import get_db
 from checkout import checkout_logic
 
 app = FastAPI()
-SRN = "PES1UG23CS349"
 templates = Jinja2Templates(directory="templates")
 
 

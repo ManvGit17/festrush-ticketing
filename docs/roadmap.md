@@ -107,7 +107,7 @@ characterization test.
   modules for identity, catalog and orders; typed settings from environment variables.
 - Passwords hashed (S1); server-side sessions, CSRF protection, writes through `POST` (S2);
   input validation (S6); generic error pages (S5); `*.db` ignored so a database can't be committed (S4);
-  SRN handled per your answer to decision 2 (S3); bare `except:` replaced by specific handling (A2).
+  the hardcoded student identifier removed (S3); bare `except:` replaced by specific handling (A2).
 - PostgreSQL 18 schema with keys, foreign keys, uniqueness and a capacity column (D1, A4, A5, A6),
   numbered migrations, an idempotent seed script (A8) and a seeded dataset.
 - The deliberate crash route (A7) moved behind a debug flag; leftover slow code and misleading
@@ -211,10 +211,9 @@ These are yours to make before I start building. Defaults are my recommendation.
    must work unauthenticated with `?user=`, that conflicts with fixing S2.
    _Default:_ keep every route name and the four Locust file names and paths, and update the
    Locust files to log in; the old `?user=` form is not kept. Tell me if the grader needs it.
-2. **The SRN in `main.py`.** It is unused by the code. Options: keep it exactly
-   where it is; move it into configuration (`FEST_SRN`) and show it in the page footer; or remove
-   it. _Default:_ I do not touch it until you answer. Note it is also the username and password
-   in the local `fest.db`, which is not on GitHub and was removed from the working tree.
+2. **The student identifier in `main.py`.** It was unused by the code. _Resolved:_ removed from
+   `main.py` and from the archived original. (It was also the username and password in the local
+   `fest.db`, which is not on GitHub and was removed from the working tree.)
 3. **License.** _Default:_ MIT, as in the previous project. (None exists today.)
 4. **Front end.** Replace the Jinja pages with a React and TypeScript app (phase 4)? This is a
    framework change. _Default:_ yes; phase 1 keeps and secures the Jinja pages, so v1's

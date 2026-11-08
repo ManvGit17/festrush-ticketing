@@ -57,10 +57,8 @@ def test_seed_command_creates_demo_accounts_once(
     assert row["n"] == 3
 
 
-def test_the_root_entry_point_still_exposes_app_and_the_srn(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``uvicorn main:app`` and the SRN line in main.py are kept from v1 (may be graded)."""
+def test_the_root_entry_point_exposes_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``uvicorn main:app`` keeps working from the project root, as in v1."""
     from festrush.config import get_settings
 
     monkeypatch.setenv("FESTRUSH_SECRET_KEY", "test-secret-key-0123456789")
@@ -69,15 +67,16 @@ def test_the_root_entry_point_still_exposes_app_and_the_srn(
     sys.modules.pop("main", None)
     main = importlib.import_module("main")
     assert hasattr(main, "app")
-    original = re.search(
-        r'^SRN = "([^"]+)"',
-        (REPO_ROOT / "legacy" / "v1" / "main.py").read_text(encoding="utf-8"),
-        re.M,
-    )
-    assert original
-    assert original.group(1) == main.SRN
     get_settings.cache_clear()
     sys.modules.pop("main", None)
+
+
+def test_no_student_identifier_is_hardcoded_in_the_source() -> None:
+    """v1 carried a student registration number as a constant that nothing used (audit S3)."""
+    srn = re.compile(r"\bPES\d[A-Z]{2}\d{2}[A-Z]{2}\d{3}\b")
+    roots = [REPO_ROOT / "src", REPO_ROOT / "legacy", REPO_ROOT / "tests", REPO_ROOT / "locust"]
+    files = [REPO_ROOT / "main.py", *(f for r in roots for f in r.rglob("*") if f.suffix in {".py", ".html"})]
+    assert [str(f) for f in files if srn.search(f.read_text(encoding="utf-8"))] == []
 
 
 def test_the_secret_key_is_required() -> None:
