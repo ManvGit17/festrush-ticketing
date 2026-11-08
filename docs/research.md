@@ -177,7 +177,7 @@ split makes things worse, the write-up says so and the code stays in the monolit
 
 ## 9. Load and chaos testing
 
-[Locust](https://docs.locust.io/en/stable/) (MIT, 28,268 stars) is already the course's tool and
+[Locust](https://docs.locust.io/en/stable/) (MIT, 28,268 stars) is already what the original project used and
 fits: plain Python user classes, a headless mode for CI, and CSV output. Scenarios:
 
 1. **Spike**: N users, M seats, all start within one second. Assert zero oversells.
@@ -204,7 +204,7 @@ Honest options:
    gateway, mock provider, dashboards). This is the real thing.
 2. **A recorded replay on GitHub Pages**: the UI plays back a trace captured from a real run
    (the seat map filling, the queue draining, the System Lens). It must be labeled as a replay,
-   not a live system. Another repository of yours, CC_Lab-6, already ships a `replay.json`
+   not a live system. A sibling project already ships a `replay.json`
    dashboard of this kind.
 3. **An in-browser simulator** that reimplements the strategies in JavaScript would be dishonest
    as a demonstration of PostgreSQL locking, so it is not proposed.

@@ -2,8 +2,10 @@
 
 College-fest ticketing that is meant to never oversell, and to prove it under load.
 
-This repository started as a Cloud Computing lab (PES University): a small FastAPI monolith for a
-fest. It is being rebuilt in phases into a systems-engineering project. The plan is in
+FestRush began as a small project covering a few cloud-computing topics: one FastAPI app for a
+college fest. This is a whole new version of it, with far more behind the same idea: seat
+holds, payments, idempotent retries, a queue and worker, a gateway, metrics and traces, and
+load and chaos tests that check the system never sells a seat twice. The plan is in
 [docs/roadmap.md](docs/roadmap.md), the starting point is audited in [docs/audit.md](docs/audit.md),
 and the approaches considered are in [docs/research.md](docs/research.md).
 
@@ -45,7 +47,7 @@ uv run ruff check src tests && uv run ruff format --check src tests
 uv run mypy
 ```
 
-The v1 characterization suite pins what the original lab code did, bugs included, and needs the
+The v1 characterization suite pins what the original code did, bugs included, and needs the
 old dependency versions it was written for:
 
 ```bash
@@ -81,7 +83,7 @@ The full comparison is `bench/run_matrix.sh`. Seats are claimed through `POST
 
 ## Load tests for the web pages
 
-The four Locust files in [locust/](locust/) are kept from the lab. Each simulated student now
+The four Locust files in [locust/](locust/) are kept from the original version. Each simulated student now
 signs up and signs in first.
 
 ```bash
@@ -96,11 +98,11 @@ uv run locust -f locust/locust/journey_locustfile.py --host http://localhost:808
 | `src/festrush/` | The application: routes, services, security, templates |
 | `db/migrations/` | The schema, as numbered SQL files applied once each |
 | `tests/` | Tests against PostgreSQL; `tests/characterization/` pins v1 |
-| `locust/` | Load tests for each page journey (kept from the lab) |
+| `locust/` | Load tests for each page journey (kept from the original version) |
 | `bench/` | The seat-rush benchmark: scenarios, runner, results and summary script |
-| `legacy/v1/` | The original lab code, unchanged |
+| `legacy/v1/` | The original version, unchanged |
 | `docs/` | Audit, research and roadmap |
 
 ## License
 
-[MIT](LICENSE). Built by Manit V Urs.
+[MIT](LICENSE).

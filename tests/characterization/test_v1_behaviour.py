@@ -87,7 +87,7 @@ def test_login_is_not_sql_injectable(client: TestClient) -> None:
 
 
 def test_empty_username_and_password_create_an_account(client: TestClient, connect: Connect) -> None:
-    # BUG (S6): no validation. On the dependency versions the lab was written against, empty
+    # BUG (S6): no validation. On the dependency versions the original was written against, empty
     # strings satisfy ``Form(...)``, so an account with a blank name and password is created.
     # (Newer FastAPI releases answer 422 here, which would hide the problem.)
     r = client.post("/register", data={"username": "", "password": ""}, follow_redirects=False)
@@ -161,7 +161,7 @@ def test_registration_for_a_missing_event_is_accepted(client: TestClient, connec
 
 
 def test_event_404_is_a_deliberate_crash(client: TestClient, connect: Connect) -> None:
-    # Lab demo (A7): event_id 404 divides by zero; the global handler shows the exception text.
+    # Demo crash (A7): event_id 404 divides by zero; the global handler shows the exception text.
     r = client.get("/register_event/404", params={"user": "asha"})
     assert r.status_code == 500
     assert "division by zero" in r.text

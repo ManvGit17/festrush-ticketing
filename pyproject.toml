@@ -4,7 +4,7 @@ version = "2.0.0.dev0"
 description = "College-fest ticketing that cannot oversell, with the load tests to prove it."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "Manit V Urs" }]
+authors = [{ name = "The FestRush authors" }]
 dependencies = [
     "argon2-cffi>=25.1.0",
     "fastapi>=0.162.0",

@@ -170,7 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api.router)
 
     if settings.debug:
-        # The lab's deliberate-crash demo, kept for the course exercise but off by default
+        # The original project's deliberate-crash demo, kept but off by default
         # (audit A7). It needs FESTRUSH_DEBUG=true.
         @app.get("/_debug/crash", include_in_schema=False)
         def crash() -> None:

@@ -1,6 +1,6 @@
 # Architecture: splitting only where the measurements say so
 
-FestRush started as the course's monolith. The plan for this phase was to measure it, then split
+FestRush started as a small monolith. The plan for this phase was to measure it, then split
 it into services only where a split pays for itself, and to say honestly where it does not. This
 page is the record: what the system looks like now, each decision with the evidence for it, and
 what was not measured. Every table is printed by `python bench/summarize.py` from the raw runs in
