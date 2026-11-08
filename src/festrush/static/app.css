@@ -114,3 +114,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .card, .btn { transition: box-shadow .15s ease, filter .15s ease; }
   .grid .card:hover { box-shadow: 0 6px 24px rgb(0 0 0 / .08); }
 }
+
+/* Live seat map and System Lens */
+.seatmap { display: flex; flex-wrap: wrap; gap: 4px; margin: 1rem 0; max-width: 40rem; }
+.seat { display: inline-block; width: 1.1rem; height: 1.1rem; border-radius: 3px; border: 2px solid currentColor; }
+.seat.free { background: transparent; }
+.seat.held { background: repeating-linear-gradient(45deg, currentColor 0 3px, transparent 3px 6px); }
+.seat.sold { background: currentColor; }
+.seat.mine { outline: 3px solid #2563eb; outline-offset: 1px; }
+.legend { display: flex; gap: 1rem; list-style: none; padding: 0; }
+#lens { position: fixed; right: 1rem; bottom: 3.5rem; width: 18rem; max-height: 60vh; overflow: auto;
+  padding: 1rem; background: Canvas; color: CanvasText; border: 1px solid currentColor; border-radius: 8px; }
+#lens[hidden] { display: none; }
+#lens dl { display: grid; grid-template-columns: 1fr auto; gap: .25rem .75rem; margin: 0; }
+#lens dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+#lens-toggle { position: fixed; right: 1rem; bottom: 1rem; }
+@media (prefers-reduced-motion: no-preference) { .seat { transition: background .2s; } }
+.nav a.btn, a.btn { color: var(--accent-text); }

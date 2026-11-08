@@ -51,6 +51,17 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 
 ## Updates
 
+### 2026-11-08: phase 4, the experience (built; Pages replay and Lens trace spans remain)
+
+- **Built:** a live seat map at `/events/{id}/live` pushed over server-sent events (free, held,
+  sold, yours), a "Hold a seat" button, and a System Lens drawer on every signed-in page showing
+  queue depth, outbox lag, lock waits and active holds (`/live/lens`). Tests: `tests/test_live.py`.
+- **Decision:** the front end is plain JavaScript served by the app, not React and TypeScript. It
+  keeps the strict CSP (no inline scripts) and avoids a Node build step. Say so if React is wanted.
+- **Not done, resume here:** Playwright end-to-end tests with axe checks in CI; the replay demo on
+  GitHub Pages; per-request trace spans in the Lens (it shows the request id only).
+- The seat map is counted from reservations, so cells show states, not physical seat labels.
+
 ### 2026-11-08: the hardcoded student identifier is removed
 
 - A student registration number was a constant in `main.py` that nothing read. It is removed from
@@ -94,8 +105,7 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 
 ## What is next
 
-1. **Phase 4, the experience:** a new front end with a live seat map, queue position, real-time
-   updates, and a "System Lens" view that shows traces, lock waits and queue depth.
+1. **Finish phase 4:** the Pages replay and trace spans in the Lens.
 2. **Phase 5, the launch:** a landing-page README, a documentation site with an API reference,
    branding, screenshots, a changelog and community files, launch drafts, and a tagged release.
 

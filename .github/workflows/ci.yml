@@ -61,6 +61,49 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  e2e:
+    name: End-to-end and accessibility (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: festrush
+          POSTGRES_PASSWORD: festrush-dev
+          POSTGRES_DB: festrush
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U festrush -d festrush"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      FESTRUSH_DATABASE_URL: postgresql://festrush:festrush-dev@localhost:5432/festrush
+      FESTRUSH_SECRET_KEY: ci-only-secret-key-0123456789
+      FESTRUSH_DEMO_PASSWORD: festrush-demo
+      E2E_BASE_URL: http://localhost:8090
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run festrush migrate && uv run festrush seed
+      - name: Start the app
+        run: |
+          nohup uv run festrush serve --port 8090 --workers 1 > serve.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8090/healthz && break; sleep 1; done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npx playwright test
+        working-directory: e2e
+
   legacy:
     name: Legacy v1 (pinned original dependencies)
     runs-on: ubuntu-latest

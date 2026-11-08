@@ -38,6 +38,11 @@
     {% block content %}{% endblock %}
   </main>
 
+  {% if user %}
+  <button id="lens-toggle" class="btn small" type="button" aria-expanded="false" aria-controls="lens">System Lens</button>
+  <aside id="lens" aria-label="System Lens" hidden><h2>System Lens</h2><p>Request {{ request.state.request_id }}</p><dl></dl></aside>
+  {% endif %}
+  <script src="/static/live.js" defer></script>
   <footer class="wrap foot">FestRush · a college-fest ticketing project</footer>
 </body>
 </html>

@@ -26,7 +26,7 @@ def test_pages_make_no_third_party_requests(client: TestClient) -> None:
         urls = re.findall(r'(?:src|href|action)="([^"]+)"', html)
         external = [u for u in urls if re.match(r"(https?:)?//", u)]
         assert external == [], f"{path} references {external}"
-        assert "<script" not in html
+        assert re.findall(r'<script(?![^>]*src="/static/)', html) == []  # no inline scripts
         assert "style=" not in html  # inline styles would be blocked by the policy
 
 
