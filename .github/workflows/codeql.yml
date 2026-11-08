@@ -10,8 +10,11 @@ on:
 permissions:
   contents: read
 
+# Code scanning is free for public repositories only, so on a private repository this job
+# is skipped instead of failing at the upload step. It starts running once the repository is public.
 jobs:
   analyze:
+    if: ${{ !github.event.repository.private }}
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     # A job-level block replaces the top-level one, so contents must be listed again.
