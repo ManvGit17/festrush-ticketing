@@ -1,0 +1,122 @@
+{
+  "commit": "unknown",
+  "database": {
+    "charges": {
+      "n": 200,
+      "refunded": 0
+    },
+    "messages": 200,
+    "orders": {
+      "confirmed": 200
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "succeeded": 200
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 200
+    },
+    "violations": {}
+  },
+  "label": "wr-fifo-100",
+  "load_seconds": 118.97,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 27154.6,
+      "failures": 0,
+      "max_ms": 49186.0,
+      "p50_ms": 26221.0,
+      "p95_ms": 42423.9,
+      "p99_ms": 45477.3,
+      "requests": 15400,
+      "rps": 129.4
+    },
+    "GET /api/queue/status": {
+      "avg_ms": 23802.8,
+      "failures": 0,
+      "max_ms": 35863.1,
+      "p50_ms": 25493.5,
+      "p95_ms": 32377.1,
+      "p99_ms": 34261.1,
+      "requests": 5000,
+      "rps": 42.0
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 24401.7,
+      "failures": 0,
+      "max_ms": 39635.8,
+      "p50_ms": 24615.9,
+      "p95_ms": 39101.3,
+      "p99_ms": 39494.6,
+      "requests": 5000,
+      "rps": 42.0
+    },
+    "POST /api/orders": {
+      "avg_ms": 18339.3,
+      "failures": 0,
+      "max_ms": 28112.5,
+      "p50_ms": 18454.8,
+      "p95_ms": 27225.4,
+      "p99_ms": 28098.8,
+      "requests": 200,
+      "rps": 1.7
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 29911.8,
+      "failures": 0,
+      "max_ms": 37183.8,
+      "p50_ms": 29111.6,
+      "p95_ms": 35692.6,
+      "p99_ms": 36824.8,
+      "requests": 200,
+      "rps": 1.7
+    },
+    "POST /api/queue/join": {
+      "avg_ms": 33501.5,
+      "failures": 0,
+      "max_ms": 49186.0,
+      "p50_ms": 37719.0,
+      "p95_ms": 43800.1,
+      "p99_ms": 48425.5,
+      "requests": 5000,
+      "rps": 42.0
+    },
+    "_errors": {}
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "admit_per_second": 100,
+    "driver": "k6",
+    "duration": 60,
+    "events": 1,
+    "expect_oversell": false,
+    "hold_minutes": 10,
+    "label": "wr-fifo-100",
+    "mockpay_decline_rate": 0.0,
+    "mockpay_latency_ms": 0,
+    "mockpay_timeout_rate": 0.0,
+    "naive_delay_ms": 0,
+    "pool_size": 10,
+    "port": 8090,
+    "queue_mode": "fifo",
+    "scenario": "spike",
+    "seats": 200,
+    "spawn_rate": 0,
+    "strategy": "atomic_update",
+    "synchronous_commit": "on",
+    "threads": 40,
+    "users": 5000,
+    "waiting_room": true,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T04:30:34+00:00"
+}

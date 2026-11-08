@@ -111,6 +111,137 @@ def soak_table(runs: list[dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
+EXPERIMENTS = {
+    "e2": ("E2: the payment provider (each charge takes 300 ms)", ["inprocess", "service"]),
+    "e3": ("E3: where the confirmation goes (each message takes 300 ms)", ["outbox", "inline"]),
+    "e4": (
+        "E4: a one-second read cache in the gateway (students refresh the page 6 times)",
+        ["nocache", "cache"],
+    ),
+}
+
+
+def stat(run: dict[str, Any], name: str, key: str) -> float | None:
+    entry = run["locust"].get(name)
+    return None if entry is None else entry[key] / 1000
+
+
+def experiments_table(runs: list[dict[str, Any]], code: str) -> str:
+    title, variants = EXPERIMENTS[code]
+    rows = [
+        f"#### {title}",
+        "",
+        "| Variant | Runs | Whole run (s) | Reserve p50 (s) | Order p50 (s) | Pay p50 (s) | Pay p95 (s) | Page refresh p50 (s) | Oversold |",
+        "| :-- | --: | --: | --: | --: | --: | --: | --: | --: |",
+    ]
+    for variant in variants:
+        rs = [r for r in runs if r["label"].startswith(f"exp-{code}-{variant}-r")]
+        if not rs:
+            continue
+
+        def col(name: str, key: str, digits: int = 1, rs: list[dict[str, Any]] = rs) -> str:
+            vals = [v for r in rs if (v := stat(r, name, key)) is not None]
+            return spread(vals, digits=digits) if vals else "n/a"
+
+        reserve, order = "POST /api/events/[id]/reserve", "POST /api/orders"
+        pay, refresh = "POST /api/orders/[id]/pay", "GET /api/events/[id] (refresh)"
+        rows.append(
+            f"| `{variant}` | {len(rs)} | {spread([r['load_seconds'] for r in rs], digits=1)} "
+            f"| {col(reserve, 'p50_ms')} | {col(order, 'p50_ms')} | {col(pay, 'p50_ms')} | {col(pay, 'p95_ms')} "
+            f"| {col(refresh, 'p50_ms', 2)} | {spread([r['database']['oversold_seats'] for r in rs])} |"
+        )
+    return "\n".join(rows)
+
+
+def by_label(runs: list[dict[str, Any]], labels: list[str]) -> list[dict[str, Any]]:
+    wanted = {name: i for i, name in enumerate(labels)}
+    return sorted((r for r in runs if r["label"] in wanted), key=lambda r: wanted[r["label"]])
+
+
+def ms(run: dict[str, Any], name: str, key: str) -> str:
+    entry = run["locust"].get(name)
+    return "n/a" if entry is None else f"{entry[key] / 1000:.1f}"
+
+
+def ceiling_table(runs: list[dict[str, Any]]) -> str:
+    """E0: what limits throughput? The same 5,000-student spike with k6, varying the web tier."""
+    rows = [
+        "| Web processes | Threads each | Students | Requests/s overall | Reserve p50 (s) |",
+        "| --: | --: | --: | --: | --: |",
+    ]
+    for r in by_label(runs, ["k6-w1", "k6-w4-t10", "k6-w4-t40", "k6-w8-t10", "k6-w16-t5"]):
+        o, agg = r["options"], r["locust"]["Aggregated"]
+        rows.append(
+            f"| {o['web_workers']} | {o.get('threads', 40)} | {o['users']:,} "
+            f"| {agg['requests'] / r['load_seconds']:.0f} | {ms(r, RESERVE, 'p50_ms')} |"
+        )
+    return "\n".join(rows)
+
+
+def gateway_table(runs: list[dict[str, Any]]) -> str:
+    rows = [
+        "| Setup | Whole run (s) | Reserve attempt p50 / p95 (s) | Order p50 (s) | Pay p50 (s) | Rejected with 429 | Seats sold | Oversold |",
+        "| :-- | --: | --: | --: | --: | --: | --: | --: |",
+    ]
+    names = {
+        "e-direct": "no gateway",
+        "e-gateway": "gateway, 300 claims/s",
+        "e-gateway-100": "gateway, 100 claims/s",
+    }
+    for r in by_label(runs, list(names)):
+        extra = r["locust"].get("_extra", {})
+        rows.append(
+            f"| {names[r['label']]} | {r['load_seconds']:.0f} | {ms(r, RESERVE, 'p50_ms')} / {ms(r, RESERVE, 'p95_ms')} "
+            f"| {ms(r, 'POST /api/orders', 'p50_ms')} | {ms(r, 'POST /api/orders/[id]/pay', 'p50_ms')} "
+            f"| {extra.get('shed_429', 0):,} | {r['database']['reservations'].get('confirmed', 0)} "
+            f"| {r['database']['oversold_seats']} |"
+        )
+    return "\n".join(rows)
+
+
+def waiting_room_table(runs: list[dict[str, Any]]) -> str:
+    rows = [
+        "| Admission rate | Whole run (s) | Join p50 (s) | Status poll p50 (s) | Reserve p50 (s) | Status polls | Seats sold | Oversold |",
+        "| --: | --: | --: | --: | --: | --: | --: | --: |",
+    ]
+    for r in by_label(runs, ["wr-fifo-100", "wr-fifo-300"]):
+        rows.append(
+            f"| {r['options']['admit_per_second']}/s | {r['load_seconds']:.0f} "
+            f"| {ms(r, 'POST /api/queue/join', 'p50_ms')} | {ms(r, 'GET /api/queue/status', 'p50_ms')} "
+            f"| {ms(r, RESERVE, 'p50_ms')} | {r['locust'].get('GET /api/queue/status', {}).get('requests', 0):,} "
+            f"| {r['database']['reservations'].get('confirmed', 0)} | {r['database']['oversold_seats']} |"
+        )
+    return "\n".join(rows)
+
+
+def chaos_table(runs: list[dict[str, Any]]) -> str:
+    rows = [
+        "| Fault | What was broken | Students | Seats sold | Messages | Failed requests | Oversold | Invariants | App back after |",
+        "| :-- | :-- | --: | --: | --: | --: | --: | :-- | --: |",
+    ]
+    names = {
+        "chaos-kill-worker": "kill the worker",
+        "chaos-kill-payments": "kill the payments service",
+        "chaos-restart-db": "stop PostgreSQL for 5 s",
+        "chaos-slow-provider": "slow, lossy provider",
+    }
+    for r in by_label(runs, list(names)):
+        o, ch = r["options"], r.get("chaos", {})
+        broken = (
+            "800 ms latency, 20% lost answers, 10% declines"
+            if r["label"] == "chaos-slow-provider"
+            else "; ".join(ch.get("events", [])) or "n/a"
+        )
+        back = ch.get("recovery_seconds")
+        rows.append(
+            f"| {names[r['label']]} | {broken} | {o['users']} | {r['database']['reservations'].get('confirmed', 0)} "
+            f"| {r['database']['messages']} | {r['locust']['Aggregated']['failures']} | {r['database']['oversold_seats']} "
+            f"| {'all hold' if not r['database']['violations'] else r['database']['violations']} "
+            f"| {'n/a' if back is None else f'{back} s'} |"
+        )
+    return "\n".join(rows)
+
+
 def environment(runs: list[dict[str, Any]]) -> str:
     if not runs:
         return "no runs"
@@ -138,6 +269,18 @@ def build(directory: Path) -> str:
     soak = soak_table(runs)
     if soak.count("\n") > 1:
         parts += ["### Soak: slow, declining and forgetful payment provider, short holds", soak]
+    for title, builder, marker in (
+        ("### E0: what limits throughput (5,000 students, k6)", ceiling_table, "k6-w"),
+        ("### The gateway: rate limiting a 5,000-student spike", gateway_table, "e-gateway"),
+        ("### The waiting room in front of the app", waiting_room_table, "wr-fifo"),
+        ("### Chaos: break something while 300 students buy 30 seats", chaos_table, "chaos-"),
+    ):
+        if any(r["label"].startswith(marker) for r in runs):
+            parts += [title, builder(runs)]
+    for code in EXPERIMENTS:
+        table = experiments_table(runs, code)
+        if table.count("\n") > 3:
+            parts.append(table)
     parts.append("Median, with the lowest to highest of the repeated runs in brackets.")
     return "\n\n".join(parts) + "\n"
 

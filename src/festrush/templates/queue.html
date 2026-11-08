@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Waiting room{% endblock %}
+{% block content %}
+<h1>Waiting room</h1>
+
+<div class="card narrow">
+  {% if not enabled %}
+    <p>There is no queue right now. You can book directly.</p>
+    <p><a class="btn" href="/events">Browse events</a></p>
+  {% elif info.admitted %}
+    <p class="note ok" role="status">You are in. You can hold seats until {{ info.admitted_until[11:16] }} UTC.</p>
+    <p><a class="btn" href="/events">Choose your events</a></p>
+  {% elif info.joined %}
+    <p class="note info" role="status">
+      {% if info.position %}You are number {{ info.position }} in the queue
+      ({{ info.waiting }} waiting).{% else %}{{ info.waiting }} people are waiting; places are drawn at random.{% endif %}
+      About {{ info.estimated_wait_seconds }} seconds to go. This page refreshes by itself.
+    </p>
+    <meta http-equiv="refresh" content="3">
+  {% else %}
+    <p>Tickets are released through a queue so that everyone gets a fair, fast turn.</p>
+    <form method="post" action="/queue/join">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn" type="submit">Join the queue</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

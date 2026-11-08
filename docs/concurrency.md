@@ -209,6 +209,11 @@ the per-request work (a session lookup, the idempotency key and several round tr
 latency on this machine's Docker volume, and the Python web processes; the load generator also
 shares the CPUs. Phase 3 profiles this before deciding anything is worth splitting out.
 
+**Update from phase 3.** Driving the same spike with k6 instead of Locust ran roughly twice as
+fast, so the throughput figures on this page understate the system, and the web tier (not the
+seat lock or the database) is what limits it. See E0 in [architecture.md](architecture.md). The
+comparison between strategies is unaffected, since every run used the same driver.
+
 **5. When 5,000 students arrive in the same second, nobody gets a fast answer.** The median
 reserve took about 19 to 25 seconds and the 95th percentile 28 to 36 seconds, with every strategy,
 because requests queue far faster than they are served. That is a throughput ceiling, not a

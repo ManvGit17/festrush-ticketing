@@ -1,11 +1,13 @@
 """Application factory."""
 
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio.to_thread
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
@@ -13,11 +15,11 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from festrush import __version__
+from festrush import __version__, metrics, tracing
 from festrush.config import Settings, get_settings
 from festrush.db import make_pool
 from festrush.deps import AppState, LoginRequired, current_user, render
-from festrush.mockpay import MockProvider
+from festrush.payments_service import make_provider
 from festrush.routes import api, auth, events, health
 from festrush.security import Csrf, Passwords
 
@@ -57,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        anyio.to_thread.current_default_thread_limiter().total_tokens = settings.threadpool_size
         pool = make_pool(settings.database_url, settings.pool_min_size, settings.pool_max_size)
         app.state.festrush = AppState(
             settings=settings,
@@ -64,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             passwords=Passwords(insecure_fast=settings.insecure_fast_hashing),
             csrf=Csrf(settings.secret_key.get_secret_value()),
             templates=templates,
-            provider=MockProvider.from_settings(pool, settings),
+            provider=make_provider(pool, settings),
         )
         try:
             yield
@@ -85,13 +88,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         request.state.request_id = uuid.uuid4().hex[:12]
+        started = time.perf_counter()
         response = await call_next(request)
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or "unmatched"
+        if path not in ("/metrics", "/healthz", "/readyz"):
+            metrics.REQUEST_SECONDS.labels(path, request.method, str(response.status_code)).observe(
+                time.perf_counter() - started
+            )
         response.headers["X-Request-ID"] = request.state.request_id
         if request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=3600"
             response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
             return response
         return _secure(response)
+
+    tracing.setup(settings, "festrush-web", app)
 
     # --- Errors: never show exception text to users (audit S5) -------------------------------
 
@@ -158,7 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api.router)
 
     if settings.debug:
-        # The lab's deliberate-crash demo, kept for the course exercise but off by default
+        # The original project's deliberate-crash demo, kept but off by default
         # (audit A7). It needs FESTRUSH_DEBUG=true.
         @app.get("/_debug/crash", include_in_schema=False)
         def crash() -> None:

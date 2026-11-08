@@ -1,0 +1,89 @@
+# The front door. Everything public goes through here; the app and the worker are not exposed.
+#
+#  - sheds excess seat-claiming traffic with 429 before it reaches a Python process
+#  - keeps a one-second copy of the event listing, so students refreshing the page do not hit the app
+#  - hides /metrics from the outside
+#  - slows password guessing
+#
+# Values in ${...} come from the environment (docker compose sets them; bench/run.py fills them
+# in for the benchmark). nginx's own $variables are left alone.
+
+worker_processes auto;
+pid /tmp/nginx.pid;
+events { worker_connections 16384; }
+
+http {
+  access_log off;
+  error_log /dev/stderr warn;
+  limit_req_log_level info;   # shedding load is normal operation, not an error
+  client_body_temp_path /tmp/nginx_body;
+  proxy_temp_path /tmp/nginx_proxy;
+  fastcgi_temp_path /tmp/nginx_fcgi;
+  uwsgi_temp_path /tmp/nginx_uwsgi;
+  scgi_temp_path /tmp/nginx_scgi;
+
+  upstream app {
+    server ${UPSTREAM};
+    keepalive 256;
+  }
+
+  proxy_cache_path /tmp/nginx_cache levels=1 keys_zone=catalog:5m max_size=20m inactive=30s;
+
+  # One bucket for the whole site (a fixed key; an empty key would not be counted at all): no matter how many clients, the app is asked for at most this
+  # many seat claims a second (plus the burst). Excess gets 429 and a Retry-After.
+  limit_req_zone "all" zone=claims:1m rate=${CLAIM_RATE}r/s;
+  # The waiting room's own endpoints (join, status) get a bucket of their own.
+  limit_req_zone "all" zone=queue:1m rate=${QUEUE_RATE}r/s;
+  # Only password attempts (POST) are limited, per client address; an empty key is not counted.
+  map $request_method $login_key {
+    POST    $binary_remote_addr;
+    default "";
+  }
+  limit_req_zone $login_key zone=logins:5m rate=${LOGIN_RATE}r/s;
+
+  server {
+    listen ${LISTEN_PORT};
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    location = /metrics { return 404; }
+
+    location ~ ^/api/events/[0-9]+/reserve$ {
+      limit_req zone=claims burst=${CLAIM_BURST} nodelay;
+      limit_req_status 429;
+      add_header Retry-After 1 always;
+      proxy_pass http://app;
+    }
+
+    location ~ ^/api/queue/ {
+      limit_req zone=queue burst=${QUEUE_BURST} nodelay;
+      limit_req_status 429;
+      add_header Retry-After 1 always;
+      proxy_pass http://app;
+    }
+
+    location ~ ^/(api/)?login$ {
+      limit_req zone=logins burst=${LOGIN_BURST} nodelay;
+      limit_req_status 429;
+      proxy_pass http://app;
+    }
+
+    location ~ ^/api/events(/[0-9]+)?$ {
+      proxy_cache catalog;
+      proxy_cache_valid 200 ${CATALOG_TTL}s;
+      proxy_cache_lock on;
+      proxy_cache_methods GET;
+      add_header X-Cache $upstream_cache_status always;
+      proxy_pass http://app;
+    }
+
+    location / {
+      proxy_pass http://app;
+    }
+  }
+}

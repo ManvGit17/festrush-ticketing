@@ -7,17 +7,21 @@ Writes accept an ``Idempotency-Key`` header: send the same key to retry safely.
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
-from festrush import inventory, orders, services
+from festrush import inventory, orders, services, waitingroom, worker
 from festrush.deps import client_id, connection, state
 from festrush.idempotency import MAX_KEY_LENGTH, Replayable, request_hash, run_idempotent
 from festrush.inventory import Outcome
 from festrush.security import SESSION_COOKIE  # noqa: F401 - documents the shared session store
 
 router = APIRouter(prefix="/api", tags=["api"])
+
+# Event availability may be up to a second old for browsers and the gateway. Claiming a seat never
+# trusts it: the reservation itself is always decided by the database.
+PUBLIC_READ = "public, max-age=1"
 
 
 class Problem(BaseModel):
@@ -111,14 +115,43 @@ def login(request: Request, body: LoginIn) -> dict[str, str]:
     return {"token": token}
 
 
+class QueueOut(BaseModel):
+    joined: bool
+    admitted: bool
+    mode: str | None = None
+    waiting: int | None = None
+    position: int | None = None
+    estimated_wait_seconds: float | None = None
+    poll_after_seconds: float | None = None
+    admitted_until: str | None = None
+    expired: bool | None = None
+
+
+@router.post("/queue/join", response_model=QueueOut)
+def join_queue(request: Request, user: CurrentUser) -> dict[str, Any]:
+    """Join the waiting room. Joining again keeps your place."""
+    st = state(request)
+    with connection(request) as conn:
+        waitingroom.join(conn, user["id"])
+        return waitingroom.status(conn, st.settings, user["id"])
+
+
+@router.get("/queue/status", response_model=QueueOut)
+def queue_status(request: Request, user: CurrentUser) -> dict[str, Any]:
+    with connection(request) as conn:
+        return waitingroom.status(conn, state(request).settings, user["id"])
+
+
 @router.get("/events", response_model=list[EventOut])
-def list_events(request: Request) -> list[dict[str, Any]]:
+def list_events(request: Request, response: Response) -> list[dict[str, Any]]:
+    response.headers["Cache-Control"] = PUBLIC_READ
     with connection(request) as conn:
         return services.list_events(conn)
 
 
 @router.get("/events/{event_id}", response_model=EventOut, responses={404: {"model": Problem}})
-def get_event(request: Request, event_id: int) -> dict[str, Any]:
+def get_event(request: Request, response: Response, event_id: int) -> dict[str, Any]:
+    response.headers["Cache-Control"] = PUBLIC_READ
     with connection(request) as conn:
         found = services.get_event(conn, event_id)
     if found is None:
@@ -133,6 +166,7 @@ def get_event(request: Request, event_id: int) -> dict[str, Any]:
     responses={
         200: {"description": "A retry with the same Idempotency-Key: the first answer, replayed"},
         404: {"model": Problem},
+        403: {"model": Problem, "description": "not_admitted: join the waiting room first"},
         409: {"model": Problem, "description": "sold_out, already_reserved or busy"},
         422: {"model": Problem, "description": "Idempotency-Key reused for a different request"},
     },
@@ -145,6 +179,10 @@ def reserve(
 ) -> JSONResponse:
     """Hold one seat for ten minutes (configurable). Pay for it with ``POST /api/orders``."""
     st = state(request)
+    if st.settings.waiting_room_enabled:
+        with connection(request) as conn:
+            if not waitingroom.is_admitted(conn, user["id"]):
+                return JSONResponse({"error": "not_admitted"}, status_code=403)
 
     def work(conn):  # type: ignore[no-untyped-def]
         result = inventory.reserve(conn, st.settings, user["id"], event_id)
@@ -196,7 +234,7 @@ def pay_order(request: Request, order_id: int, user: CurrentUser) -> dict[str, A
     with connection(request) as conn:
         if orders.get_order(conn, order_id, user["id"]) is None:
             raise HTTPException(status_code=404, detail="no such order")
-    orders.run_payment(st.pool, st.provider, order_id)
+    orders.run_payment(st.pool, st.provider, order_id, worker.inline_notifier(st.settings))
     with connection(request) as conn:
         order = orders.get_order(conn, order_id, user["id"])
     assert order is not None

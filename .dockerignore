@@ -7,5 +7,6 @@
 !src/
 !db/
 !bench/
+!gateway/
 bench/results/
 **/__pycache__

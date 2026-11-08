@@ -5,10 +5,10 @@ import logging
 import os
 import sys
 
-from festrush import invariants, services, worker
+from festrush import invariants, services, tracing, worker
 from festrush.config import Settings, get_settings
 from festrush.db import connect, make_pool, migrate
-from festrush.mockpay import MockProvider
+from festrush.payments_service import make_provider
 from festrush.security import Passwords
 
 DEMO_USER_COUNT = 5
@@ -39,13 +39,26 @@ def cmd_seed(settings: Settings, demo_users: int) -> None:
 def cmd_worker(settings: Settings) -> None:
     """Run the background worker until interrupted. Safe to kill and restart at any time."""
     pool = make_pool(settings.database_url, 1, 4)
-    print("worker started (Ctrl-C to stop)")
+    tracing.setup(settings, "festrush-worker")
+    from prometheus_client import start_http_server
+
+    start_http_server(settings.worker_metrics_port)
+    print(f"worker started, metrics on :{settings.worker_metrics_port} (Ctrl-C to stop)")
     try:
-        worker.run_forever(pool, settings, MockProvider.from_settings(pool, settings))
+        worker.run_forever(pool, settings, make_provider(pool, settings))
     except KeyboardInterrupt:
         pass
     finally:
         pool.close()
+
+
+def cmd_payments(settings: Settings, host: str, port: int) -> None:
+    """Run the mock payment provider as its own service."""
+    import uvicorn
+
+    from festrush.payments_service import create_payments_app
+
+    uvicorn.run(create_payments_app(settings), host=host, port=port, log_level="warning")
 
 
 def cmd_check(settings: Settings) -> int:
@@ -74,7 +87,16 @@ def cmd_rebuild_inventory(settings: Settings) -> None:
 
 
 def cmd_serve(settings: Settings, host: str, port: int, workers: int) -> None:
+    import shutil
+    import tempfile
+
     import uvicorn
+
+    # Every web process writes its metrics here and /metrics merges them.
+    metrics_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR") or tempfile.mkdtemp(prefix="festrush-metrics-")
+    shutil.rmtree(metrics_dir, ignore_errors=True)
+    os.makedirs(metrics_dir, exist_ok=True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = metrics_dir
 
     uvicorn.run(
         "festrush.app:create_app",
@@ -103,6 +125,9 @@ def main(argv: list[str] | None = None) -> None:
     serve.add_argument("--port", type=int, default=8080)
     serve.add_argument("--workers", type=int, default=1, help="server processes")
     sub.add_parser("worker", help="run the background worker (holds, outbox, payments)")
+    payments = sub.add_parser("payments", help="run the mock payment provider as a service")
+    payments.add_argument("--host", default="127.0.0.1")
+    payments.add_argument("--port", type=int, default=0, help="default: FESTRUSH_PAYMENTS_PORT (8070)")
     sub.add_parser("check", help="check the invariants; exit 1 if any fails")
     sub.add_parser("rebuild-inventory", help="rebuild seats and counters from reservations")
     args = parser.parse_args(argv)
@@ -115,6 +140,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_seed(settings, args.demo_users)
     elif args.command == "worker":
         cmd_worker(settings)
+    elif args.command == "payments":
+        cmd_payments(settings, args.host, args.port or settings.payments_port)
     elif args.command == "check":
         sys.exit(cmd_check(settings))
     elif args.command == "rebuild-inventory":

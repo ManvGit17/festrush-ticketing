@@ -88,6 +88,8 @@ jobs:
           curl -fsS http://localhost:8080/healthz
           curl -fsS http://localhost:8080/readyz
           curl -fsS http://localhost:8080/events | grep -q "Hackathon"
+          curl -fsS http://localhost:8088/api/events | grep -q "Hackathon"   # through the gateway
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8088/metrics)" = 404   # hidden
       - name: A short run of the real user journey (fails on any error)
         run: |
           uv sync --locked
@@ -141,6 +143,40 @@ jobs:
         with:
           name: seat-rush-results
           path: bench/results/
+
+  chaos:
+    name: Chaos (worker, payments, database)
+    runs-on: ubuntu-latest
+    env:
+      FESTRUSH_BENCH_DATABASE_URL: postgresql://festrush:festrush-dev@localhost:5440/festrush_bench
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Start PostgreSQL (the database fault needs one Compose can stop and start)
+        run: docker compose up -d --wait db
+      - name: Kill the worker mid-run, then put it back
+        run: |
+          uv run python bench/run.py --strategy atomic_update --users 300 --seats 30 --web-workers 2 \
+            --chaos kill-worker --chaos-at 1 --chaos-for 6 --label ci-chaos-worker
+      - name: Kill the payments service mid-run, then put it back
+        run: |
+          uv run python bench/run.py --strategy atomic_update --users 300 --seats 30 --web-workers 2 \
+            --payments-service --chaos kill-payments --chaos-at 1 --chaos-for 5 --label ci-chaos-payments
+      - name: Stop PostgreSQL for five seconds mid-run
+        run: |
+          uv run python bench/run.py --strategy atomic_update --users 100 --seats 20 --web-workers 2 \
+            --chaos restart-db --chaos-at 2 --chaos-for 5 --label ci-chaos-db
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: chaos-results
+          path: bench/results/
+      - name: Stop
+        if: always()
+        run: docker compose down -v
 
   audit:
     name: Dependency audit

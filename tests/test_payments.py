@@ -125,16 +125,35 @@ def test_a_lost_response_is_settled_by_the_worker(app_state: Any, held: dict[str
     assert invariants.violations(db) == {}
 
 
-def test_a_charge_the_provider_never_saw_is_failed_not_taken(
+def test_a_charge_the_provider_never_saw_is_sent_again_not_lost(
     app_state: Any, held: dict[str, int], db: Db
 ) -> None:
-    """The web process died after claiming the payment but before calling the provider."""
+    """The web process died after claiming the payment but before calling the provider. The
+    provider has no record, so nothing was taken; the reconciler sends the charge again with the
+    same key (so it is taken at most once) and the sale completes instead of being abandoned."""
     order_id = new_order(app_state, held["user"])
     db.execute("UPDATE payments SET status = 'processing' WHERE order_id = %s", (order_id,))
     quick = make_settings(payment_reconcile_seconds=0)
     assert orders.reconcile_payments(app_state.pool, provider(app_state), quick) == 1
+    assert status(db, "payments", "order_id", order_id) == "succeeded"
+    assert status(db, "orders", "id", order_id) == "confirmed"
+    assert db.execute("SELECT count(*) AS n FROM mock_charges").fetchone()["n"] == 1  # type: ignore[index]
+
+
+def test_an_unseen_charge_for_an_order_that_expired_is_not_sent(
+    app_state: Any, held: dict[str, int], db: Db
+) -> None:
+    """Never take money for seats that are already gone."""
+    order_id = new_order(app_state, held["user"])
+    db.execute("UPDATE payments SET status = 'processing' WHERE order_id = %s", (order_id,))
+    db.execute("UPDATE reservations SET expires_at = now() - interval '10 minutes'")
+    with app_state.pool.connection() as conn:
+        inventory.expire_holds(conn, make_settings(payment_grace_seconds=0))
+    assert status(db, "orders", "id", order_id) == "expired"
+    quick = make_settings(payment_reconcile_seconds=0)
+    assert orders.reconcile_payments(app_state.pool, provider(app_state), quick) == 1
     assert status(db, "payments", "order_id", order_id) == "failed"
-    assert status(db, "orders", "id", order_id) == "payment_failed"
+    assert db.execute("SELECT count(*) AS n FROM mock_charges").fetchone()["n"] == 0  # type: ignore[index]
 
 
 def test_late_money_after_expiry_is_refunded(app_state: Any, held: dict[str, int], db: Db) -> None:

@@ -16,6 +16,9 @@ x-app: &app
     FESTRUSH_DATABASE_URL: postgresql://festrush:${POSTGRES_PASSWORD:-festrush-dev}@db:5432/festrush
     FESTRUSH_SECRET_KEY: ${FESTRUSH_SECRET_KEY:-local-development-only-secret-change-me}
     FESTRUSH_DEMO_PASSWORD: ${FESTRUSH_DEMO_PASSWORD:-festrush-demo}
+    FESTRUSH_PAYMENTS_URL: http://payments:8070
+    # Set to http://jaeger:4318 (and use --profile observability) to send traces. Empty means off.
+    FESTRUSH_OTLP_ENDPOINT: ${FESTRUSH_OTLP_ENDPOINT:-}
 
 services:
   db:
@@ -43,28 +46,111 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # The mock payment provider, as its own service on the internal network (nothing is published).
+  payments:
+    <<: *app
+    command: ["festrush", "payments", "--host", "0.0.0.0", "--port", "8070"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8070/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
   # Releases expired holds, delivers confirmations and settles unfinished payments. Safe to kill.
   worker:
     <<: *app
     command: ["festrush", "worker"]
     restart: unless-stopped
+    depends_on:
+      payments:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
     healthcheck:
       # No web server here; being able to reach the database is the useful signal.
       test: ["CMD", "python", "-c", "import os, psycopg; psycopg.connect(os.environ['FESTRUSH_DATABASE_URL'], connect_timeout=3).close()"]
       interval: 10s
       timeout: 5s
       retries: 5
-    depends_on:
-      setup:
-        condition: service_completed_successfully
 
   app:
     <<: *app
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:
+      payments:
+        condition: service_healthy
       setup:
         condition: service_completed_successfully
+
+  # The front door: rate limiting, a one-second read cache, /metrics hidden. http://localhost:8088
+  gateway:
+    image: nginx:1.27-alpine
+    environment:
+      UPSTREAM: app:8080
+      LISTEN_PORT: "80"
+      CLAIM_RATE: ${CLAIM_RATE:-300}
+      CLAIM_BURST: ${CLAIM_BURST:-200}
+      QUEUE_RATE: ${QUEUE_RATE:-600}
+      QUEUE_BURST: ${QUEUE_RATE:-600}
+      LOGIN_RATE: ${LOGIN_RATE:-5}
+      LOGIN_BURST: ${LOGIN_BURST:-20}
+      CATALOG_TTL: ${CATALOG_TTL:-1}
+    volumes:
+      - ./gateway/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+    # The template is a whole nginx.conf, so fill in the values and run it directly.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        envsubst '$$UPSTREAM $$LISTEN_PORT $$CLAIM_RATE $$CLAIM_BURST $$QUEUE_RATE $$QUEUE_BURST $$LOGIN_RATE $$LOGIN_BURST $$CATALOG_TTL'           < /etc/nginx/nginx.conf.template > /tmp/nginx.conf
+        exec nginx -c /tmp/nginx.conf -g 'daemon off;'
+    ports:
+      - "${GATEWAY_PORT:-8088}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      app:
+        condition: service_healthy
+
+  # --- Observability: docker compose --profile observability up -d ---------------------------------
+  # Traces need the app and worker started with FESTRUSH_OTLP_ENDPOINT=http://jaeger:4318.
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.11.0
+    ports:
+      - "${JAEGER_PORT:-16686}:16686"
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-festrush-dev}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/festrush.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3300}:3000"
+    depends_on:
+      - prometheus
+      - jaeger
 
   # The load tests, run inside the same Linux environment so results do not depend on the host:
   #   docker compose --profile bench run --rm bench --strategy atomic_update --users 5000 --seats 200

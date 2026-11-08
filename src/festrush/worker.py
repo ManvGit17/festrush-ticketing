@@ -16,10 +16,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from festrush import idempotency, inventory, orders
+from festrush import idempotency, inventory, metrics, orders, waitingroom
 from festrush.config import Settings
 from festrush.db import Conn, Pool
-from festrush.mockpay import MockProvider
+from festrush.payments_service import Provider
+from festrush.tracing import tracer
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +62,19 @@ HANDLERS: dict[str, Callable[[Conn, dict[str, Any]], None]] = {
 }
 
 
+def inline_notifier(settings: Settings) -> orders.Notifier | None:
+    """The confirmation sent inside the payment request (experiment E3), or None for the outbox."""
+    if not settings.notify_inline:
+        return None
+
+    def send(conn: Conn, payload: dict[str, Any]) -> None:
+        _confirmation(conn, payload)
+        if settings.worker_handler_delay_ms:
+            time.sleep(settings.worker_handler_delay_ms / 1000)  # the email provider's latency
+
+    return send
+
+
 def process_outbox(pool: Pool, settings: Settings, limit: int = 50) -> int:
     """Deliver pending outbox events. Returns how many were handled (successfully or not)."""
     handled = 0
@@ -75,11 +89,15 @@ def process_outbox(pool: Pool, settings: Settings, limit: int = 50) -> int:
             handled += 1
             try:
                 with conn.transaction():  # a savepoint: one bad event doesn't undo the batch
-                    HANDLERS[row["topic"]](conn, row["payload"])
+                    with tracer.start_as_current_span(f"outbox.{row['topic']}") as span:
+                        span.set_attribute("festrush.outbox_id", int(row["id"]))
+                        HANDLERS[row["topic"]](conn, row["payload"])
                     if settings.worker_handler_delay_ms:
                         time.sleep(settings.worker_handler_delay_ms / 1000)
                     conn.execute("UPDATE outbox SET processed_at = now() WHERE id = %s", (row["id"],))
+                metrics.OUTBOX_PROCESSED.labels(row["topic"]).inc()
             except Exception as exc:
+                metrics.OUTBOX_FAILED.labels(row["topic"]).inc()
                 attempts = int(row["attempts"]) + 1
                 dead = attempts >= settings.outbox_max_attempts
                 backoff = min(2**attempts, 300) * random.uniform(0.5, 1.5)  # noqa: S311
@@ -93,8 +111,38 @@ def process_outbox(pool: Pool, settings: Settings, limit: int = 50) -> int:
     return handled
 
 
-def run_once(pool: Pool, settings: Settings, provider: MockProvider) -> int:
+class AdmissionClock:
+    """Admits students at ``waiting_room_admit_per_second``, however often the worker wakes up."""
+
+    def __init__(self) -> None:
+        self.last = time.monotonic()
+        self.carry = 0.0
+
+    def due(self, per_second: int) -> int:
+        now = time.monotonic()
+        self.carry += (now - self.last) * per_second
+        self.last = now
+        whole = int(self.carry)
+        self.carry -= whole
+        return whole
+
+
+_clock = AdmissionClock()
+
+
+def admit_students(pool: Pool, settings: Settings, clock: AdmissionClock | None = None) -> int:
+    if not settings.waiting_room_enabled:
+        return 0
+    due = (clock or _clock).due(settings.waiting_room_admit_per_second)
+    with pool.connection() as conn:
+        admitted = waitingroom.admit_next(conn, settings, due)
+    metrics.ADMITTED.inc(admitted)
+    return admitted
+
+
+def run_once(pool: Pool, settings: Settings, provider: Provider) -> int:
     """One pass of every job. Returns the amount of work found, so callers can idle on zero."""
+    admit_students(pool, settings)  # on a steady clock; not counted as work, so the worker still idles
     work = orders.expire_stale(pool, settings)
     work += process_outbox(pool, settings)
     work += orders.reconcile_payments(pool, provider, settings)
@@ -102,7 +150,7 @@ def run_once(pool: Pool, settings: Settings, provider: MockProvider) -> int:
 
 
 def run_forever(
-    pool: Pool, settings: Settings, provider: MockProvider, stop: threading.Event | None = None
+    pool: Pool, settings: Settings, provider: Provider, stop: threading.Event | None = None
 ) -> None:
     stop = stop or threading.Event()
     last_prune = 0.0

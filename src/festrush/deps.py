@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 from festrush.config import Settings
 from festrush.db import Conn, Pool
-from festrush.mockpay import MockProvider
+from festrush.payments_service import Provider
 from festrush.security import CSRF_COOKIE, SESSION_COOKIE, Csrf, Passwords
 from festrush.services import user_for_session
 
@@ -22,7 +22,7 @@ class AppState:
     passwords: Passwords
     csrf: Csrf
     templates: Jinja2Templates
-    provider: MockProvider
+    provider: Provider
 
 
 class LoginRequired(Exception):

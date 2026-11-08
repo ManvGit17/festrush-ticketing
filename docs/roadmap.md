@@ -5,7 +5,7 @@ is built yet; this is the plan to approve._
 
 ## Positioning
 
-> **A fest ticketing system that cannot oversell, and proves it.** It starts as the course's
+> **A fest ticketing system that cannot oversell, and proves it.** It starts as a small
 > monolith, measures it under a launch-day rush, and splits into services only where the
 > measurements say a split helps.
 
@@ -54,19 +54,16 @@ are extracted.
 | Database | **PostgreSQL 18** (SQLite dropped) | Row locks, `SKIP LOCKED`, constraints, `LISTEN/NOTIFY`; the queue and idempotency store live here too. |
 | Migrations | Plain numbered `.sql` files and a small runner | Same approach as the previous project. |
 | Passwords and sessions | Argon2id or bcrypt hashes; server-side sessions in PostgreSQL, `HttpOnly` `SameSite=Lax` cookie; CSRF token on forms | Fixes S1, S2, S7. |
-| Gateway | **nginx** | You already run it in CC_Lab-6; provides `limit_req` and routing for the strangler step. |
+| Gateway | **nginx** | Provides `limit_req` and routing for the strangler step. |
 | Web UI | **React 19 + TypeScript + Vite**, Tailwind v4 (built, not CDN), SSE for live updates | Same stack as the previous project; fixes S8. Needs your approval (decision 4). |
 | Observability | OpenTelemetry, Prometheus, Grafana, Jaeger, all in Compose | Self-hosted, no keys, no data leaves the machine. |
-| Load tests | Locust, with a checker script | Already the course tool. |
+| Load tests | Locust, with a checker script | Already used by the original project. |
 | CI | GitHub Actions: ruff, mypy, pytest against a PostgreSQL 18 service, Compose smoke test, small load and chaos run, Playwright with axe, CodeQL, pip-audit and npm audit | Matches the previous project's CI, plus load. |
 
-### What happens to CC_Lab-6
+### A separate autoscaling project
 
-**Recommendation: link to it; do not fold it in.** CC_Lab-6 has grown into its own project
-(C++ backends, an autoscaling controller, a dashboard), and merging it would blur both stories.
-Instead, this project uses an nginx gateway of its own, and the launch docs link to CC_Lab-6 as
-"the same idea applied to autoscaling". If you want the Jenkins pipeline here, it can be added as
-an optional second CI target later.
+An unrelated autoscaling project of the same author exists. It is linked from the launch material, not merged here; this
+project has an nginx gateway of its own.
 
 ## Features, ranked by value and risk
 
@@ -148,6 +145,9 @@ confirmation.
 
 ### PR 3: Services and observability (`modernize/services`)
 
+_Status: built, with results that differ from the plan; see [architecture.md](architecture.md). Not built: the
+inventory-service experiment (E1), so that split is argued, not measured._
+
 - Experiments E1 to E4, one per candidate in [research §7](research.md#7-splitting-a-monolith-only-where-it-pays),
   each with a before and after measurement. The write-up states which splits helped and which did
   not.
@@ -184,7 +184,7 @@ generated from the OpenAPI schema, logo and wordmark, screenshots and demo anima
 preview, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and PR
 templates, at least ten issues in `docs/good-first-issues.md`, honest drafts in `docs/launch/`
 (blog post, Show HN, Reddit, X, LinkedIn), `docs/MODERNIZATION_SUMMARY.md`, then a tagged release
-(`v2.0.0`; v1 is the lab). All links come from one config file so a repository rename is a
+(`v2.0.0`; v1 is the original version). All links come from one config file so a repository rename is a
 one-line change.
 
 Done when: no placeholders or broken links, every number in the docs is traceable to a script in
@@ -199,7 +199,6 @@ the repository, and the release is published.
 - **Lockfiles** are generated or verified in a Linux container, since you are on Windows.
 - **Ports.** Local services use ports other than 8000, 8001 and 5000 (proposed: app 8080,
   gateway 8088, Grafana 3300, Jaeger 16686, PostgreSQL 5440).
-- **Credit.** The project is Manit V Urs's alone.
 
 ## Decisions needed
 
@@ -215,14 +214,14 @@ These are yours to make before I start building. Defaults are my recommendation.
 2. **The SRN in `main.py`.** It is unused by the code. Options: keep it exactly
    where it is; move it into configuration (`FEST_SRN`) and show it in the page footer; or remove
    it. _Default:_ I do not touch it until you answer. Note it is also the username and password
-   in the lab folder's `fest.db`, which is not on GitHub and which I removed from the working tree.
+   in the local `fest.db`, which is not on GitHub and was removed from the working tree.
 3. **License.** _Default:_ MIT, as in the previous project. (None exists today.)
 4. **Front end.** Replace the Jinja pages with a React and TypeScript app (phase 4)? This is a
    framework change. _Default:_ yes; phase 1 keeps and secures the Jinja pages, so v1's
    server-rendered flow is still there until phase 4.
 5. **SQLite to PostgreSQL** and the schema and API changes this implies (new tables, sessions,
    `POST` for registration). _Default:_ approved as in this plan.
-6. **CC_Lab-6.** _Default:_ link only, do not merge (see above).
+6. **A separate autoscaling project.** _Default:_ link only, do not merge (see above).
 7. **Names.** Keep the repository name `MonolithicApplication` (it carries the story). The
    product name in the UI and docs is not decided; _suggestion:_ **FestRush**.
 8. **Merge timing.** Should I merge each pull request as soon as CI passes, or hold any of them

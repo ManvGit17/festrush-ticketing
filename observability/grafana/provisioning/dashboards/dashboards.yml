@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: FestRush
+    folder: FestRush
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

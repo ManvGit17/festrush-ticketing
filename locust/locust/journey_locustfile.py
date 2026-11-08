@@ -1,6 +1,6 @@
 """The full student journey: browse, hold a seat, review, pay.
 
-Lives at its original path (locust/locust/) because the course may refer to it there.
+Lives at its original path (locust/locust/) because the original project's layout put it there.
 """
 
 import random

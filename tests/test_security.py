@@ -48,7 +48,7 @@ def test_errors_do_not_show_exception_text() -> None:
 
 
 def test_the_crash_demo_does_not_exist_unless_debug_is_on(client: TestClient) -> None:
-    # A7: the lab's deliberate-crash route is off by default.
+    # A7: the original's deliberate-crash route is off by default.
     assert client.get("/_debug/crash").status_code == 404
 
 
