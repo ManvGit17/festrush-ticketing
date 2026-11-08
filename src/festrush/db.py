@@ -24,8 +24,18 @@ def make_pool(database_url: str, min_size: int, max_size: int) -> Pool:
         database_url,
         min_size=min_size,
         max_size=max_size,
-        kwargs={"row_factory": dict_row},
+        # connect_timeout: while PostgreSQL is down or restarting, a connection attempt must fail
+        # fast so the pool can try again, not hang for minutes.
+        kwargs={"row_factory": dict_row, "connect_timeout": 3},
         open=False,
+        # After PostgreSQL restarts, connections in the pool are dead. Test each one as it is
+        # handed out (and replace it) instead of failing the request that happens to get it.
+        check=ConnectionPool.check_connection,
+        # Waiting for a connection longer than this means the database is not coming back soon:
+        # answer 503 so the client can retry, instead of hanging.
+        timeout=5.0,
+        reconnect_timeout=300.0,
+        max_lifetime=1800.0,
     )
     pool.open(wait=True, timeout=30)
     return pool
