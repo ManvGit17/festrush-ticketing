@@ -188,3 +188,12 @@ pinned in `tests/characterization/` against `legacy/v1/`.
 | D2 | Open (low) | Fees stay whole rupees as an integer; documented in the schema |
 | D3 | Fixed | The lab copy's database is no longer in the project folder |
 | H1-H5 | Fixed | README, MIT license, tests, lint, types, CI and Dependabot, `locust` moved to dev dependencies, `.gitignore` extended |
+
+### After phase 2 (the concurrency core)
+
+| # | Status | How |
+| :-- | :-- | :-- |
+| A4 | Fixed under load | The unique active reservation per student and event holds when requests race (`test_a_double_click_storm_holds_one_seat`), and retries with an idempotency key take effect once (`tests/test_idempotency.py`, the retry-storm run in [concurrency.md](concurrency.md)) |
+| A6 | Fixed under load | Four strategies, three of which never oversold in the benchmark runs; the naive one did. Measured in [concurrency.md](concurrency.md) |
+| A3 | Extended | Checkout now creates an order and a payment. Only the signed-in student's live holds are charged, and the payment moves through a state machine the database enforces |
+| D1 | Extended | Reservations, orders, payments, the outbox and idempotency keys all have keys, foreign keys and checks; order and reservation status moves are validated by triggers |

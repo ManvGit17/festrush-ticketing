@@ -1,0 +1,97 @@
+{
+  "commit": "94d7802",
+  "database": {
+    "charges": {
+      "n": 30,
+      "refunded": 0
+    },
+    "messages": 30,
+    "orders": {
+      "confirmed": 30
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "succeeded": 30
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 30
+    },
+    "violations": {}
+  },
+  "label": "small-skip_locked-r3",
+  "load_seconds": 2.84,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 895.8,
+      "failures": 0,
+      "max_ms": 1820.9,
+      "p50_ms": 820,
+      "p95_ms": 1700,
+      "p99_ms": 1800,
+      "requests": 360,
+      "rps": 178.2
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 961.9,
+      "failures": 0,
+      "max_ms": 1820.9,
+      "p50_ms": 920,
+      "p95_ms": 1700,
+      "p99_ms": 1800,
+      "requests": 300,
+      "rps": 148.5
+    },
+    "POST /api/orders": {
+      "avg_ms": 711.4,
+      "failures": 0,
+      "max_ms": 1389.3,
+      "p50_ms": 650,
+      "p95_ms": 1400,
+      "p99_ms": 1400,
+      "requests": 30,
+      "rps": 14.8
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 419.8,
+      "failures": 0,
+      "max_ms": 615.0,
+      "p50_ms": 450,
+      "p95_ms": 580,
+      "p99_ms": 610,
+      "requests": 30,
+      "rps": 14.8
+    },
+    "_errors": {}
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "duration": 60,
+    "events": 1,
+    "expect_oversell": false,
+    "hold_minutes": 10,
+    "label": "small-skip_locked-r3",
+    "mockpay_decline_rate": 0.0,
+    "mockpay_latency_ms": 0,
+    "mockpay_timeout_rate": 0.0,
+    "naive_delay_ms": 0,
+    "pool_size": 10,
+    "port": 8090,
+    "scenario": "spike",
+    "seats": 30,
+    "spawn_rate": 0,
+    "strategy": "skip_locked",
+    "synchronous_commit": "on",
+    "users": 300,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T04:02:55+00:00"
+}

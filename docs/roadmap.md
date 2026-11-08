@@ -126,6 +126,8 @@ findings S1 to S6, A1 to A5, A7 to A9 and D1 are closed or explicitly tracked.
 
 ### PR 2: The concurrency core (`modernize/concurrency`)
 
+_Status: built; see [concurrency.md](concurrency.md)._
+
 - Schema: events with capacity, seats, holds with `expires_at`, orders, payments, idempotency keys,
   outbox.
 - Four reservation strategies behind one interface, selectable by configuration:
