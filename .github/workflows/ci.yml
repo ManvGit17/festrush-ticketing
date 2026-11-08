@@ -95,7 +95,7 @@ jobs:
         run: |
           nohup uv run festrush serve --port 8090 --workers 1 > serve.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8090/healthz && break; sleep 1; done
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: npm install
