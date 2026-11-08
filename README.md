@@ -94,4 +94,4 @@ uv run locust -f locust/locust/journey_locustfile.py --host http://localhost:808
 
 ## License
 
-[MIT](LICENSE). Built by Manit V Urs.
+[MIT](LICENSE).
