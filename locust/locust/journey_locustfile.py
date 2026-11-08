@@ -1,10 +1,11 @@
-"""The full student journey: browse, register for one event, review, check out.
+"""The full student journey: browse, hold a seat, review, pay.
 
 Lives at its original path (locust/locust/) because the course may refer to it there.
 """
 
 import random
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -19,12 +20,12 @@ class FestJourneyUser(HttpUser):
 
     def on_start(self) -> None:
         sign_up_and_in(self)
-        self.registered: set[str] = set()
+        self.held: set[str] = set()
 
     @task
     def journey(self) -> None:
         page = self.client.get("/events")
-        open_events = [e for e in EVENT_FORM.findall(page.text) if e not in self.registered]
+        open_events = [e for e in EVENT_FORM.findall(page.text) if e not in self.held]
         if open_events:
             event_id = random.choice(open_events)
             self.client.post(
@@ -32,6 +33,12 @@ class FestJourneyUser(HttpUser):
                 data={"csrf_token": form_token(self, "/login")},
                 name="POST /register_event/[id]",
             )
-            self.registered.add(event_id)
+            self.held.add(event_id)
         self.client.get("/my-events")
         self.client.get("/checkout")
+        # Paying twice with the same key pays once; a fresh key per attempt is what the form does.
+        self.client.post(
+            "/checkout",
+            data={"csrf_token": form_token(self, "/login"), "idempotency_key": uuid.uuid4().hex},
+            name="POST /checkout",
+        )
