@@ -28,6 +28,7 @@ jobs:
       - run: uv run ruff format --check src tests scripts locust bench main.py
       - run: uv run ruff check src tests scripts locust bench main.py
       - run: uv run mypy
+      - run: uv run python scripts/build_docs.py --check
 
   test:
     name: Tests (PostgreSQL 18)

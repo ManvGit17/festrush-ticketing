@@ -1,3 +1,3 @@
 """FestRush: college-fest ticketing that cannot oversell."""
 
-__version__ = "2.0.0.dev0"
+__version__ = "2.0.0"

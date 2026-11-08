@@ -1,23 +1,29 @@
-# FestRush
+<p align="center"><img src="docs/assets/logo.svg" alt="FestRush" width="320"></p>
 
 > **New here? Read [START_HERE.md](START_HERE.md):** how to run it, where to read, and the running log of updates.
 
-College-fest ticketing that is meant to never oversell, and to prove it under load.
+**College-fest ticketing that is built never to sell a seat twice, with the tests and benchmarks to
+show it.**
+
+![The live seat map and the System Lens](docs/assets/seat-map-and-lens.png)
 
 FestRush began as a small project covering a few cloud-computing topics: one FastAPI app for a
-college fest. This is a whole new version of it, with far more behind the same idea: seat
-holds, payments, idempotent retries, a queue and worker, a gateway, metrics and traces, and
-load and chaos tests that check the system never sells a seat twice. The plan is in
-[docs/roadmap.md](docs/roadmap.md), the starting point is audited in [docs/audit.md](docs/audit.md),
-and the approaches considered are in [docs/research.md](docs/research.md).
+college fest. This is a whole new version of it: seat holds that expire, idempotent payments, a
+queue and worker, a gateway, metrics and traces, a live seat map, and load and chaos tests that
+check the system never sells a seat twice.
 
-**Status: phase 3 (services and observability).** Done: PostgreSQL 18 with migrations, secure
-accounts, seat holds and a payment state machine the database enforces, four seat-claiming
-strategies, idempotency keys, an outbox and worker, the payment provider as its own service, an
-nginx gateway, a waiting room, Prometheus metrics, OpenTelemetry traces, a Grafana dashboard,
-chaos tests, and benchmarks. Not yet built: the new UI and the launch material. See the
-[roadmap](docs/roadmap.md), [how seats are sold exactly once](docs/concurrency.md) and
-[where the system was split, and where it was not](docs/architecture.md).
+**What was measured** (copied from [bench/results/SUMMARY.md](bench/results/SUMMARY.md)): with 300
+students and 30 seats the deliberately unsafe strategy sold 40; the three safe ones sold exactly 30.
+At 5,000 students and 200 seats the safe ones again oversold nothing. Sending every write twice with
+the same key still produced one order and one charge per seat. The summary also lists results that
+went against the plan.
+
+**Status: version 2.0.0.** Not done, and said plainly: the inventory is not a separate service, the
+front end is plain JavaScript rather than React, and there is no recorded replay demo. See the
+[changelog](CHANGELOG.md), the [modernization summary](docs/MODERNIZATION_SUMMARY.md), the
+[roadmap](docs/roadmap.md), [how seats are sold exactly once](docs/concurrency.md), [where the
+system was split and where it was not](docs/architecture.md) and the [API reference](docs/api.md).
+The starting point was audited in [docs/audit.md](docs/audit.md).
 
 ## Quick start
 
@@ -103,7 +109,13 @@ uv run locust -f locust/locust/journey_locustfile.py --host http://localhost:808
 | `locust/` | Load tests for each page journey (kept from the original version) |
 | `bench/` | The seat-rush benchmark: scenarios, runner, results and summary script |
 | `legacy/v1/` | The original version, unchanged apart from one removed hardcoded identifier |
-| `docs/` | Audit, research and roadmap |
+| `docs/` | Audit, research, roadmap, architecture, API reference, launch drafts |
+| `e2e/` | Playwright journey and accessibility checks; `screenshots.mjs` rebuilds the images |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [good first issues](docs/good-first-issues.md),
+[SECURITY.md](SECURITY.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
