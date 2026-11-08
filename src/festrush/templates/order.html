@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order.id }}{% endblock %}
+{% block content %}
+<h1>Order #{{ order.id }}</h1>
+
+<div class="card narrow">
+  {% if order.status == 'confirmed' %}
+    <p class="note ok" role="status">Paid and confirmed. Your seats are yours.</p>
+  {% elif order.status == 'payment_failed' %}
+    <p class="note error" role="alert">The payment was declined. Your seats are still on hold; try again.</p>
+  {% elif order.status == 'refunded' %}
+    <p class="note info" role="status">This order expired before payment finished, so it was refunded.</p>
+  {% elif order.status == 'expired' %}
+    <p class="note error" role="alert">This order expired. The seats were released.</p>
+  {% else %}
+    <p class="note info" role="status">Payment is still being confirmed. Refresh in a moment.</p>
+  {% endif %}
+
+  <table>
+    <caption class="sr">Items in this order</caption>
+    <thead><tr><th scope="col">Event</th><th scope="col" class="num">Fee</th></tr></thead>
+    <tbody>
+      {% for i in order['items'] %}
+        <tr><td>{{ i.name }}</td><td class="num">₹{{ i.fee }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><th scope="row">Total</th><td class="num total">₹{{ order.total }}</td></tr></tfoot>
+  </table>
+  <p class="muted">Status: {{ order.status.replace('_', ' ') }} · payment {{ order.payment_status }}</p>
+
+  {% for m in messages %}
+    <div class="note info"><b>{{ m.subject }}</b><br>{{ m.body }}</div>
+  {% endfor %}
+  <p><a class="btn ghost" href="/my-events">My events</a></p>
+</div>
+{% endblock %}

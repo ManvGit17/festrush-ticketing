@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,6 +29,32 @@ class Settings(BaseSettings):
     # further attempts until the oldest one ages out.
     login_max_failures: int = Field(default=5, ge=1)
     login_window_minutes: int = Field(default=10, ge=1)
+
+    # How a seat is claimed. See docs/concurrency.md for what each one does and costs.
+    #   naive          read the count, then insert: the baseline that can oversell
+    #   row_lock       lock the event row for the whole claim
+    #   atomic_update  one conditional UPDATE of a counter on the event row
+    #   skip_locked    take a free seat row nobody else has locked
+    inventory_strategy: Literal["naive", "row_lock", "atomic_update", "skip_locked"] = "atomic_update"
+    # Widens the gap between the naive strategy's check and its insert, as a slow network hop
+    # or extra business logic would. Only the naive strategy reads it.
+    naive_delay_ms: int = Field(default=0, ge=0)
+
+    hold_minutes: int = Field(default=10, ge=1)
+    # A hold with a payment in flight is kept this long past its expiry before it is released.
+    payment_grace_seconds: int = Field(default=120, ge=0)
+    # How long a payment may sit unsettled before the worker asks the provider what happened.
+    payment_reconcile_seconds: int = Field(default=30, ge=0)
+
+    # The mock payment provider. Rates are fractions between 0 and 1; outcomes are decided by
+    # the idempotency key, so a retry of the same payment always gets the same answer.
+    mockpay_latency_ms: int = Field(default=0, ge=0)
+    mockpay_decline_rate: float = Field(default=0.0, ge=0, le=1)
+    mockpay_timeout_rate: float = Field(default=0.0, ge=0, le=1)
+
+    worker_poll_ms: int = Field(default=200, ge=10)
+    worker_handler_delay_ms: int = Field(default=0, ge=0)  # test hook: widen the crash window
+    outbox_max_attempts: int = Field(default=8, ge=1)
 
     # Cheap Argon2 parameters so the test suite and CI do not spend minutes hashing.
     # Never enable this outside tests.

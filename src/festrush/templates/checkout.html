@@ -4,22 +4,45 @@
 <h1>Checkout</h1>
 
 <div class="card narrow">
-  {% if events %}
+  {% if holds %}
     <table>
-      <caption class="sr">What you owe</caption>
+      <caption class="sr">Seats on hold, waiting for payment</caption>
       <thead><tr><th scope="col">Event</th><th scope="col" class="num">Fee</th></tr></thead>
       <tbody>
-        {% for e in events %}
-          <tr><td>{{ e.name }}</td><td class="num">₹{{ e.fee }}</td></tr>
+        {% for h in holds %}
+          <tr><td>{{ h.name }}</td><td class="num">₹{{ h.fee }}</td></tr>
         {% endfor %}
       </tbody>
       <tfoot><tr><th scope="row">Total</th><td class="num total">₹{{ total }}</td></tr></tfoot>
     </table>
-    <p class="muted">Online payment is not part of this release. This page shows what you owe
-      for the events you registered for.</p>
+    <form method="post" action="/checkout" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+      <button class="btn" type="submit">Pay ₹{{ total }}</button>
+      <small class="muted">Payments here are simulated; no money moves. Pressing twice pays once.</small>
+    </form>
   {% else %}
-    <p>Nothing to pay yet: you haven't registered for any event.</p>
+    <p>Nothing to pay: you have no seats on hold.</p>
     <p><a class="btn" href="/events">Browse events</a></p>
   {% endif %}
 </div>
+
+{% if orders %}
+  <h2 class="gap">Your orders</h2>
+  <div class="card narrow">
+    <table>
+      <caption class="sr">Past orders</caption>
+      <thead><tr><th scope="col">Order</th><th scope="col">Status</th><th scope="col" class="num">Total</th></tr></thead>
+      <tbody>
+        {% for o in orders %}
+          <tr>
+            <td><a href="/orders/{{ o.id }}">#{{ o.id }}</a></td>
+            <td>{{ o.status.replace('_', ' ') }}</td>
+            <td class="num">₹{{ o.total }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
 {% endblock %}

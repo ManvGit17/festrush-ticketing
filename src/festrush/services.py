@@ -1,12 +1,9 @@
-"""Database operations. Every function takes a connection and leaves committing to the caller,
-except where a function documents that it runs its own transaction."""
+"""Accounts, sessions, throttling, event listings and seeding. Every function takes a connection
+and leaves committing to the caller. Seat claiming is in inventory.py, payment in orders.py."""
 
-import enum
 import re
 from datetime import timedelta
 from typing import Any
-
-import psycopg.errors
 
 from festrush.db import Conn, one
 from festrush.security import hash_token, new_session_token
@@ -31,8 +28,7 @@ def create_user(conn: Conn, username: str, password_hash: str) -> int | None:
     """Insert a user. Returns the new id, or None if the name (any case) is taken."""
     row = one(
         conn,
-        "INSERT INTO users (username, password_hash) VALUES (%s, %s)"
-        " ON CONFLICT DO NOTHING RETURNING id",
+        "INSERT INTO users (username, password_hash) VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING id",
         (username, password_hash),
     )
     return None if row is None else int(row["id"])
@@ -77,9 +73,7 @@ def delete_session(conn: Conn, token: str) -> None:
 # --- Login throttling ----------------------------------------------------------------------
 
 
-def login_blocked(
-    conn: Conn, username: str, client: str, *, max_failures: int, minutes: int
-) -> bool:
+def login_blocked(conn: Conn, username: str, client: str, *, max_failures: int, minutes: int) -> bool:
     row = one(
         conn,
         "SELECT count(*) AS n FROM login_failures"
@@ -90,95 +84,57 @@ def login_blocked(
 
 
 def record_login_failure(conn: Conn, username: str, client: str) -> None:
-    conn.execute(
-        "INSERT INTO login_failures (username, client) VALUES (lower(%s), %s)", (username, client)
-    )
+    conn.execute("INSERT INTO login_failures (username, client) VALUES (lower(%s), %s)", (username, client))
     conn.execute("DELETE FROM login_failures WHERE attempted_at < now() - interval '1 day'")
 
 
 def clear_login_failures(conn: Conn, username: str, client: str) -> None:
-    conn.execute(
-        "DELETE FROM login_failures WHERE username = lower(%s) AND client = %s", (username, client)
-    )
+    conn.execute("DELETE FROM login_failures WHERE username = lower(%s) AND client = %s", (username, client))
 
 
-# --- Events and registrations --------------------------------------------------------------
+# --- Events and reservations ---------------------------------------------------------------
 
 
 def list_events(conn: Conn) -> list[dict[str, Any]]:
+    """Events with how many seats are left, counted from the reservations themselves."""
     return conn.execute(
-        "SELECT id, name, description, fee, capacity, seats_taken,"
-        " capacity - seats_taken AS seats_left FROM events ORDER BY id"
+        "SELECT e.id, e.name, e.description, e.fee, e.capacity,"
+        " (SELECT count(*) FROM reservations r WHERE r.event_id = e.id"
+        "   AND r.status IN ('held', 'confirmed'))::int AS active,"
+        " e.capacity - (SELECT count(*) FROM reservations r WHERE r.event_id = e.id"
+        "   AND r.status IN ('held', 'confirmed'))::int AS seats_left"
+        " FROM events e ORDER BY e.id"
     ).fetchall()
 
 
-def registered_event_ids(conn: Conn, user_id: int) -> set[int]:
-    rows = conn.execute("SELECT event_id FROM registrations WHERE user_id = %s", (user_id,))
-    return {int(r["event_id"]) for r in rows}
-
-
-def registrations_for(conn: Conn, user_id: int) -> list[dict[str, Any]]:
-    return conn.execute(
-        "SELECT e.id, e.name, e.fee, r.created_at FROM registrations r"
-        " JOIN events e ON e.id = r.event_id WHERE r.user_id = %s ORDER BY r.created_at, r.id",
-        (user_id,),
-    ).fetchall()
-
-
-def total_fee(conn: Conn, user_id: int) -> int:
-    """What this user owes: the fees of the events they registered for, and nobody else's."""
-    row = one(
+def get_event(conn: Conn, event_id: int) -> dict[str, Any] | None:
+    return one(
         conn,
-        "SELECT COALESCE(sum(e.fee), 0)::int AS total FROM registrations r"
-        " JOIN events e ON e.id = r.event_id WHERE r.user_id = %s",
-        (user_id,),
+        "SELECT e.id, e.name, e.fee, e.capacity, e.capacity - (SELECT count(*) FROM reservations r"
+        " WHERE r.event_id = e.id AND r.status IN ('held', 'confirmed'))::int AS seats_left"
+        " FROM events e WHERE e.id = %s",
+        (event_id,),
     )
-    return int(row["total"]) if row else 0
 
 
-class Outcome(enum.Enum):
-    REGISTERED = "registered"
-    ALREADY = "already"
-    FULL = "full"
-    NO_EVENT = "no_event"
+def my_reservations(conn: Conn, user_id: int) -> list[dict[str, Any]]:
+    """The user's live holds and confirmed seats (history is not shown)."""
+    return conn.execute(
+        "SELECT r.id, r.status, r.expires_at, r.order_id, e.id AS event_id, e.name, e.fee,"
+        " o.status AS order_status FROM reservations r JOIN events e ON e.id = r.event_id"
+        " LEFT JOIN orders o ON o.id = r.order_id"
+        " WHERE r.user_id = %s AND r.status IN ('held', 'confirmed') ORDER BY r.created_at, r.id",
+        (user_id,),
+    ).fetchall()
 
 
-class _Rollback(Exception):
-    pass
-
-
-def register_for_event(conn: Conn, user_id: int, event_id: int) -> Outcome:
-    """Register a user for an event; safe against double clicks and concurrent buyers.
-
-    Runs in its own transaction. Two requests for the same (user, event) collide on the unique
-    constraint, so only one row is created. The seat is claimed with a single conditional
-    UPDATE, so the counter can never pass the capacity however many requests race.
-    """
-    if one(conn, "SELECT 1 AS x FROM events WHERE id = %s", (event_id,)) is None:
-        return Outcome.NO_EVENT
-    try:
-        with conn.transaction():
-            created = one(
-                conn,
-                "INSERT INTO registrations (user_id, event_id) VALUES (%s, %s)"
-                " ON CONFLICT (user_id, event_id) DO NOTHING RETURNING id",
-                (user_id, event_id),
-            )
-            if created is None:
-                return Outcome.ALREADY
-            claimed = one(
-                conn,
-                "UPDATE events SET seats_taken = seats_taken + 1"
-                " WHERE id = %s AND seats_taken < capacity RETURNING id",
-                (event_id,),
-            )
-            if claimed is None:
-                raise _Rollback  # undo the registration row
-    except _Rollback:
-        return Outcome.FULL
-    except psycopg.errors.ForeignKeyViolation:
-        return Outcome.NO_EVENT
-    return Outcome.REGISTERED
+def my_orders(conn: Conn, user_id: int) -> list[dict[str, Any]]:
+    return conn.execute(
+        "SELECT o.id, o.status, o.total, o.created_at, p.status AS payment_status"
+        " FROM orders o LEFT JOIN payments p ON p.order_id = o.id"
+        " WHERE o.user_id = %s ORDER BY o.id DESC LIMIT 20",
+        (user_id,),
+    ).fetchall()
 
 
 # --- Seeding -------------------------------------------------------------------------------
@@ -202,7 +158,8 @@ def seed_events(conn: Conn) -> int:
         conn.execute(
             "INSERT INTO events (name, description, fee, capacity) VALUES (%s, %s, %s, %s)"
             " ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description,"
-            " fee = EXCLUDED.fee, capacity = GREATEST(events.seats_taken, EXCLUDED.capacity)",
+            " fee = EXCLUDED.fee, capacity = GREATEST(events.claimed, EXCLUDED.capacity)",
             (name, description, fee, capacity),
         )
+    conn.execute("SELECT rebuild_inventory()")  # seats for new events, counters for changed ones
     return len(SEED_EVENTS)

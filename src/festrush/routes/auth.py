@@ -29,9 +29,7 @@ def register(request: Request, username: str = Form(""), password: str = Form(""
     username = username.strip()
     problem = services.validate_credentials(username, password)
     if problem:
-        return render(
-            request, "register.html", None, status_code=422, error=problem, username=username
-        )
+        return render(request, "register.html", None, status_code=422, error=problem, username=username)
     password_hash = state(request).passwords.hash(password)
     with connection(request) as conn:
         user_id = services.create_user(conn, username, password_hash)
