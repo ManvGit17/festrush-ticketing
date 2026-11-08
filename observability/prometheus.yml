@@ -1,0 +1,11 @@
+# Scrapes the app (all web processes merged), and the worker. Both are on the internal network.
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: festrush-web
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8080"]
+  - job_name: festrush-worker
+    static_configs:
+      - targets: ["worker:9102"]
