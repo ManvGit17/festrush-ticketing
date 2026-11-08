@@ -21,6 +21,7 @@ const TARGET = __ENV.TARGET || "http://127.0.0.1:8090";
 const STORM = (__ENV.SCENARIO || "spike") === "retry-storm";
 const QUEUE = (__ENV.WAITING_ROOM || "0") === "1";
 const EVENT_ID = Number(__ENV.EVENT_ID || 1);
+const REFRESHES = Number(__ENV.REFRESHES || 0);
 const POLL = Number(__ENV.POLL_SECONDS || 2); // a client polls its position every 2 to 4 seconds
 
 export const options = {
@@ -36,6 +37,8 @@ export const options = {
   thresholds: {
     // Declaring a threshold on each tag makes k6 report that request type on its own.
     "http_req_duration{name:reserve}": ["max>=0"],
+    "http_req_duration{name:refresh}": ["max>=0"],
+    "http_reqs{name:refresh}": ["count>=0"],
     "http_reqs{name:reserve}": ["count>=0"],
     "http_reqs{name:order}": ["count>=0"],
     "http_reqs{name:pay}": ["count>=0"],
@@ -78,6 +81,11 @@ function write(method, path, name, key) {
 }
 
 export default function () {
+  // Students refresh the page while they wait for the sale to open; those reads are what a cache absorbs.
+  for (let i = 0; i < REFRESHES; i++) {
+    http.get(`${TARGET}/api/events/${EVENT_ID}`, { tags: { name: "refresh" } });
+    sleep(0.2 + Math.random() * 0.4);
+  }
   if (QUEUE) {
     // Join the waiting room and poll until admitted.
     retrying("POST", "/api/queue/join", "queue_join", `q-${__VU}`, false);

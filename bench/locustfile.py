@@ -27,6 +27,8 @@ from locust import HttpUser, between, constant, events, task
 SCENARIO = os.environ.get("BENCH_SCENARIO", "spike")
 TOTAL = int(os.environ.get("BENCH_USERS", "100"))
 EVENT_IDS = [int(x) for x in os.environ.get("BENCH_EVENT_IDS", "1").split(",")]
+# Chaos runs: a student whose request fails with a server error tries again, as a person would.
+RETRY_ERRORS = os.environ.get("BENCH_RETRY_ERRORS") == "1"
 
 _next_index = itertools.count()
 _finished = 0
@@ -45,14 +47,20 @@ class Buyer(HttpUser):
         headers = dict(self.headers)
         if key:
             headers["Idempotency-Key"] = key
-        # 409 is an expected answer (sold out, already holding); only 5xx, 4xx and timeouts count
-        # as failures.
-        with self.client.request(method, path, headers=headers, name=name, catch_response=True) as r:
-            if r.status_code in (200, 201, 409):
-                r.success()
-            else:
+        attempts = 25 if RETRY_ERRORS else 1
+        for attempt in range(attempts):
+            # 409 is an expected answer (sold out, already holding); only 5xx, 4xx and timeouts count
+            # as failures.
+            with self.client.request(method, path, headers=headers, name=name, catch_response=True) as r:
+                if r.status_code in (200, 201, 409):
+                    r.success()
+                    return r
                 r.failure(f"HTTP {r.status_code}")
+            if attempt + 1 < attempts and (r.status_code >= 500 or r.status_code == 0):
+                gevent.sleep(1)
+                continue
             return r
+        return r
 
     def _twice(self, name: str, method: str, path: str, key: str | None):  # type: ignore[no-untyped-def]
         """Send the same request twice at once and check both got the same answer."""

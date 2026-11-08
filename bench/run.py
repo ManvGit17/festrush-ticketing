@@ -25,6 +25,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from datetime import UTC, datetime
@@ -43,6 +44,7 @@ from festrush.db import migrate
 DEFAULT_URL = "postgresql://festrush:festrush-dev@localhost:5440/festrush_bench"
 RESULTS = REPO_ROOT / "bench" / "results"
 FEE = 100
+PAYMENTS_PORT = 8071
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,6 +70,24 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mockpay-decline-rate", type=float, default=0.0)
     p.add_argument("--mockpay-timeout-rate", type=float, default=0.0)
     p.add_argument("--hold-minutes", type=int, default=10)
+    p.add_argument("--notify-inline", action="store_true", help="send confirmations inside the pay request")
+    p.add_argument("--email-delay-ms", type=int, default=0, help="simulated latency of sending one message")
+    p.add_argument(
+        "--payments-service",
+        action="store_true",
+        help="run the payment provider as its own process (the app talks to it over HTTP)",
+    )
+    p.add_argument(
+        "--chaos",
+        choices=["none", "kill-worker", "kill-payments", "restart-db"],
+        default="none",
+        help="break something while the load runs, then put it back",
+    )
+    p.add_argument("--chaos-at", type=float, default=2.0, help="seconds after the load starts")
+    p.add_argument("--chaos-for", type=float, default=6.0, help="seconds the fault lasts")
+    p.add_argument(
+        "--refreshes", type=int, default=0, help="page refreshes (GET event) each student does first"
+    )
     p.add_argument("--gateway", action="store_true", help="put the nginx gateway in front of the app")
     p.add_argument("--claim-rate", type=int, default=300, help="gateway: seat claims per second let through")
     p.add_argument("--claim-burst", type=int, default=200, help="gateway: extra claims allowed at once")
@@ -140,14 +160,20 @@ def child_env(args: argparse.Namespace) -> dict[str, str]:
         "FESTRUSH_INVENTORY_STRATEGY": args.strategy,
         "FESTRUSH_NAIVE_DELAY_MS": str(args.naive_delay_ms),
         "FESTRUSH_THREADPOOL_SIZE": str(args.threads),
+        "FESTRUSH_NOTIFY_INLINE": "true" if args.notify_inline else "false",
+        "FESTRUSH_WORKER_HANDLER_DELAY_MS": str(args.email_delay_ms),
         "FESTRUSH_WAITING_ROOM_ENABLED": "true" if args.waiting_room else "false",
         "FESTRUSH_WAITING_ROOM_MODE": args.queue_mode,
         "FESTRUSH_WAITING_ROOM_ADMIT_PER_SECOND": str(args.admit_per_second),
         "FESTRUSH_POOL_MIN_SIZE": "2",
         "FESTRUSH_POOL_MAX_SIZE": str(args.pool_size),
         "FESTRUSH_HOLD_MINUTES": str(args.hold_minutes),
-        "FESTRUSH_PAYMENT_RECONCILE_SECONDS": "5" if args.scenario == "soak" else "30",
+        "FESTRUSH_PAYMENT_RECONCILE_SECONDS": "5"
+        if (args.scenario == "soak" or args.chaos != "none")
+        else "30",
         "FESTRUSH_PAYMENT_GRACE_SECONDS": "10" if args.scenario == "soak" else "120",
+        "FESTRUSH_PAYMENTS_URL": f"http://127.0.0.1:{PAYMENTS_PORT}" if args.payments_service else "",
+        "FESTRUSH_PAYMENTS_TIMEOUT_SECONDS": "2",
         "FESTRUSH_MOCKPAY_LATENCY_MS": str(args.mockpay_latency_ms),
         "FESTRUSH_MOCKPAY_DECLINE_RATE": str(args.mockpay_decline_rate),
         "FESTRUSH_MOCKPAY_TIMEOUT_RATE": str(args.mockpay_timeout_rate),
@@ -189,6 +215,104 @@ def start_gateway(args: argparse.Namespace) -> subprocess.Popen[Any]:
     return subprocess.Popen(["nginx", "-c", str(conf), "-g", "daemon off;"], stdout=subprocess.DEVNULL)
 
 
+def start_worker(env: dict[str, str]) -> subprocess.Popen[Any]:
+    return subprocess.Popen(
+        [sys.executable, "-m", "festrush", "worker"], cwd=REPO_ROOT, env=env, stdout=subprocess.DEVNULL
+    )
+
+
+def start_payments(env: dict[str, str]) -> subprocess.Popen[Any]:
+    return subprocess.Popen(
+        [sys.executable, "-m", "festrush", "payments", "--port", str(PAYMENTS_PORT)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+class Chaos:
+    """Breaks one thing at a set moment, then puts it back. Everything it does is logged."""
+
+    def __init__(self, args: argparse.Namespace, env: dict[str, str], procs: dict[str, Any]) -> None:
+        self.args, self.env, self.procs = args, env, procs
+        self.log: list[str] = []
+        self.timers: list[threading.Timer] = []
+
+    def _note(self, text: str) -> None:
+        self.log.append(text)
+        print(f"  [chaos] {text}", flush=True)
+
+    def start(self) -> None:
+        kind, at, last = self.args.chaos, self.args.chaos_at, self.args.chaos_for
+        if kind == "none":
+            return
+        actions = {
+            "kill-worker": (self._kill("background"), self._revive("background", start_worker)),
+            "kill-payments": (self._kill("payments"), self._revive("payments", start_payments)),
+            "restart-db": (self._stop_db, self._start_db),
+        }
+        down, up = actions[kind]
+        self.timers = [threading.Timer(at, down), threading.Timer(at + last, up)]
+        for t in self.timers:
+            t.daemon = True
+            t.start()
+
+    def _kill(self, name: str):  # type: ignore[no-untyped-def]
+        def go() -> None:
+            self._note(f"killing {name}")
+            stop(self.procs[name])
+
+        return go
+
+    def _revive(self, name: str, factory):  # type: ignore[no-untyped-def]
+        def go() -> None:
+            self._note(f"starting {name} again")
+            self.procs[name] = factory(self.env)
+
+        return go
+
+    def _stop_db(self) -> None:
+        self._note("stopping PostgreSQL")
+        subprocess.run(["docker", "compose", "stop", "db"], cwd=REPO_ROOT, capture_output=True, check=False)
+
+    def _start_db(self) -> None:
+        self._note("starting PostgreSQL again")
+        subprocess.run(["docker", "compose", "start", "db"], cwd=REPO_ROOT, capture_output=True, check=False)
+
+    def cancel(self) -> None:
+        for t in self.timers:
+            t.cancel()
+
+    def restore(self) -> None:
+        """Put back anything still broken (the load may end before the fault does)."""
+        self.cancel()
+        kind = self.args.chaos
+        if kind == "none" or not self.log or len(self.log) % 2 == 0:
+            return  # nothing was broken, or it was already put back
+        if kind == "restart-db":
+            self._start_db()
+        elif kind == "kill-worker":
+            self._revive("background", start_worker)()
+        elif kind == "kill-payments":
+            self._revive("payments", start_payments)()
+
+
+def probe_recovery(args: argparse.Namespace) -> float | None:
+    """After the fault is over, how long until the app answers a real request again?"""
+    started = time.monotonic()
+    port = args.gateway_port if args.gateway else args.port
+    while time.monotonic() - started < 90:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/readyz", timeout=3) as r:
+                if r.status == 200:
+                    return round(time.monotonic() - started, 1)
+        except OSError:
+            pass
+        time.sleep(0.25)
+    return None
+
+
 def wait_until_up(port: int, proc: subprocess.Popen[Any]) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -212,6 +336,7 @@ K6_NAMES = {
     "pay": "POST /api/orders/[id]/pay",
     "queue_join": "POST /api/queue/join",
     "queue_wait": "GET /api/queue/status",
+    "refresh": "GET /api/events/[id] (refresh)",
 }
 
 
@@ -236,6 +361,7 @@ def run_k6(
             "SCENARIO": args.scenario,
             "WAITING_ROOM": "1" if args.waiting_room else "0",
             "MAX_DURATION": f"{cap}s",
+            "REFRESHES": str(args.refreshes),
             "EVENT_ID": event_ids.split(",")[0],
         }
         t0 = time.monotonic()
@@ -375,12 +501,18 @@ def main() -> int:
         ],
         cwd=REPO_ROOT,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        # BENCH_WEB_LOG=<file> keeps the web server's output, for working out why a run failed.
+        stdout=open(os.environ["BENCH_WEB_LOG"], "w")  # noqa: SIM115
+        if os.environ.get("BENCH_WEB_LOG")
+        else subprocess.DEVNULL,
+        stderr=subprocess.STDOUT if os.environ.get("BENCH_WEB_LOG") else subprocess.DEVNULL,
     )
     background = subprocess.Popen(
         [sys.executable, "-m", "festrush", "worker"], cwd=REPO_ROOT, env=env, stdout=subprocess.DEVNULL
     )
+    payments = start_payments(env) if args.payments_service else None
+    procs: dict[str, Any] = {"background": background, "payments": payments}
+    chaos = Chaos(args, env, procs)
     started = datetime.now(UTC)
     gateway = None
     try:
@@ -389,6 +521,7 @@ def main() -> int:
             gateway = start_gateway(args)
             wait_until_up(args.gateway_port, gateway)
         cap = args.duration if args.scenario == "soak" else 120
+        chaos.start()
         if args.driver == "k6":
             locust_stats, load_seconds = run_k6(args, env, event_ids, cap)
         else:
@@ -423,6 +556,7 @@ def main() -> int:
                         "BENCH_USERS": str(args.users),
                         "BENCH_EVENT_IDS": event_ids,
                         "BENCH_STATS_OUT": str(stats_file),
+                        "BENCH_RETRY_ERRORS": "1" if args.chaos != "none" else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -433,12 +567,16 @@ def main() -> int:
                     sys.stderr.write(locust.stdout[-3000:] + locust.stderr[-3000:])
                     raise SystemExit("locust produced no statistics")
                 locust_stats = json.loads(stats_file.read_text(encoding="utf-8"))
-        settled = settle(args)
+        chaos.restore()
+        recovery_seconds = probe_recovery(args) if args.chaos != "none" else None
+        settled = settle(args, 150 if args.chaos != "none" else 90)
     finally:
+        chaos.cancel()
         if gateway is not None:
             stop(gateway)
-        stop(background)
-        stop(web)
+        for proc in (procs["background"], procs["payments"], web):
+            if proc is not None:
+                stop(proc)
 
     db = read_database(args)
     result = {
@@ -458,6 +596,7 @@ def main() -> int:
             "postgres": db["postgres"],
         },
         "load_seconds": round(load_seconds, 2),
+        "chaos": {"kind": args.chaos, "events": chaos.log, "recovery_seconds": recovery_seconds},
         "timed_out": args.scenario != "soak" and load_seconds >= 119,
         "settled": settled,
         "locust": locust_stats,
@@ -473,7 +612,8 @@ def main() -> int:
     if args.expect_oversell:
         ok = db["oversold_seats"] > 0
     failed = locust_stats.get("Aggregated", {}).get("failures", 0)
-    if failed and not args.expect_oversell:
+    # A database restart is allowed to fail the requests that arrive while it is down.
+    if failed and not args.expect_oversell and args.chaos != "restart-db":
         print(f"  {failed} requests failed (5xx, timeouts or unexpected statuses)")
         ok = False
     return 0 if ok else 1
@@ -501,6 +641,11 @@ def print_summary(r: dict[str, Any]) -> None:
         print(
             f"  student view of reserve (first attempt to answer): p50 {extra['reserve_journey_p50_ms']} ms, "
             f"p95 {extra['reserve_journey_p95_ms']} ms; shed with 429: {extra['shed_429']}"
+        )
+    ch = r.get("chaos", {})
+    if ch.get("kind", "none") != "none":
+        print(
+            f"  chaos {ch['kind']}: {len(ch['events'])} fault events; app ready again {ch.get('recovery_seconds')} s after it ended"
         )
     print(f"  OVERSOLD SEATS: {db['oversold_seats']}   violated invariants: {db['violations'] or 'none'}")
 
