@@ -130,3 +130,4 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 #lens dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
 #lens-toggle { position: fixed; right: 1rem; bottom: 1rem; }
 @media (prefers-reduced-motion: no-preference) { .seat { transition: background .2s; } }
+.nav a.btn, a.btn { color: var(--accent-text); }

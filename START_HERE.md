@@ -51,7 +51,7 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 
 ## Updates
 
-### 2026-11-08: phase 4, the experience (built; Playwright and Pages replay not yet)
+### 2026-11-08: phase 4, the experience (built; Pages replay and Lens trace spans remain)
 
 - **Built:** a live seat map at `/events/{id}/live` pushed over server-sent events (free, held,
   sold, yours), a "Hold a seat" button, and a System Lens drawer on every signed-in page showing
@@ -105,7 +105,7 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 
 ## What is next
 
-1. **Finish phase 4:** Playwright and axe tests in CI, the Pages replay, trace spans in the Lens.
+1. **Finish phase 4:** the Pages replay and trace spans in the Lens.
 2. **Phase 5, the launch:** a landing-page README, a documentation site with an API reference,
    branding, screenshots, a changelog and community files, launch drafts, and a tagged release.
 
