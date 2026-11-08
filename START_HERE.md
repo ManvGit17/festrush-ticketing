@@ -36,6 +36,8 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 | How a seat is sold exactly once, and the measurements | [docs/concurrency.md](docs/concurrency.md) |
 | What was split into services, what was not, and the evidence | [docs/architecture.md](docs/architecture.md) |
 | The raw benchmark runs behind every number | [bench/results/](bench/results/) |
+| The API, generated from the schema | [docs/api.md](docs/api.md) |
+| Changes by version | [CHANGELOG.md](CHANGELOG.md) |
 
 ## Where things are
 
@@ -50,6 +52,17 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 | `legacy/v1/` | The original version, kept for reference |
 
 ## Updates
+
+### 2026-11-08: phase 5, the launch
+
+- **Built:** README as a landing page with logo and screenshots, API reference generated from the
+  OpenAPI schema (`scripts/build_docs.py`, checked in CI along with every local link), changelog,
+  contributing guide, code of conduct, security policy, issue and PR templates, twelve good first
+  issues, launch drafts in `docs/launch/`, and a modernization summary. Version is now 2.0.0.
+- **One config file for links:** `docs/site.json`; change the address there and rerun the script.
+- **Not done:** the Pages replay demo, an animated walkthrough, trace spans in the Lens, a hosted docs
+  site (the docs are Markdown in the repository).
+- Numbers in the docs are copied from `bench/results/SUMMARY.md`, which `bench/summarize.py` rebuilds.
 
 ### 2026-11-08: phase 4, the experience (built; Pages replay and Lens trace spans remain)
 
@@ -105,9 +118,8 @@ Grafana is at <http://localhost:3300>, Jaeger at :16686, Prometheus at :9090.
 
 ## What is next
 
-1. **Finish phase 4:** the Pages replay and trace spans in the Lens.
-2. **Phase 5, the launch:** a landing-page README, a documentation site with an API reference,
-   branding, screenshots, a changelog and community files, launch drafts, and a tagged release.
+The plan is complete apart from the items marked "Not done" above (replay demo, Lens trace spans,
+hosted docs site).
 
 ## Open items for the maintainer
 

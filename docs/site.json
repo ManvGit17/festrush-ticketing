@@ -1,0 +1,6 @@
+{
+  "name": "FestRush",
+  "repository": "https://github.com/ManvGit17/festrush-ticketing",
+  "names": ["festrush-ticketing", "MonolithicApplication"],
+  "version": "2.0.0"
+}
