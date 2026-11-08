@@ -14,6 +14,7 @@ def test_the_seat_map_counts_free_held_sold_and_yours(
     event_id = make_event("Hackathon", 500, 5)
     me = db.execute("SELECT id FROM users WHERE username = 'asha'").fetchone()
     other = make_user("ravi")
+    assert me is not None
     for uid, status in ((me["id"], "held"), (other, "confirmed")):
         db.execute(
             "INSERT INTO reservations (user_id, event_id, status, expires_at)"
