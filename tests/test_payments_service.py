@@ -175,10 +175,12 @@ def test_paying_through_the_service_confirms_the_order(
     assert invariants.violations(db) == {}
 
 
-def test_a_service_that_is_down_during_payment_never_double_charges_or_loses_the_seat(
+def test_a_provider_outage_during_payment_delays_the_sale_without_losing_it(
     app_state: Any, make_event: Any, make_user: Any, service: Callable[..., Service], db: Db
 ) -> None:
-    """The provider dies, comes back, and the order is settled by the worker, not left hanging."""
+    """The provider dies, comes back, and the order is completed by the worker: charged exactly
+    once, seat confirmed, nobody left hanging. (A chaos run found the old behaviour, giving up
+    on the payment, abandoned every sale made during an outage.)"""
     order_id = hold_and_order(app_state, make_event, make_user)
     svc = service()
     provider = HttpProvider(svc.url, timeout=0.5)
@@ -193,12 +195,12 @@ def test_a_service_that_is_down_during_payment_never_double_charges_or_loses_the
     assert status["status"] == "unknown"
 
     svc.start()  # same port: it is back
-    # It never saw the charge, so nothing was taken: the payment is failed and the hold is kept.
     assert orders.reconcile_payments(app_state.pool, provider, quick) == 1
     order = db.execute("SELECT status FROM orders").fetchone()
     assert order
-    assert order["status"] == "payment_failed"
-    held = db.execute("SELECT status FROM reservations").fetchone()
-    assert held
-    assert held["status"] == "held"
+    assert order["status"] == "confirmed"
+    charges = db.execute("SELECT count(*) AS n FROM mock_charges").fetchone()
+    assert charges
+    assert charges["n"] == 1
+    worker.process_outbox(app_state.pool, app_state.settings)
     assert invariants.violations(db) == {}
