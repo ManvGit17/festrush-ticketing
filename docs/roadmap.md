@@ -148,6 +148,9 @@ confirmation.
 
 ### PR 3: Services and observability (`modernize/services`)
 
+_Status: built, with results that differ from the plan; see [architecture.md](architecture.md). Not built: the
+inventory-service experiment (E1), so that split is argued, not measured._
+
 - Experiments E1 to E4, one per candidate in [research §7](research.md#7-splitting-a-monolith-only-where-it-pays),
   each with a before and after measurement. The write-up states which splits helped and which did
   not.

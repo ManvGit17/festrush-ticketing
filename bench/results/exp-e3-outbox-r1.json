@@ -1,0 +1,125 @@
+{
+  "chaos": {
+    "events": [],
+    "kind": "none",
+    "recovery_seconds": null
+  },
+  "commit": "85f7f44",
+  "database": {
+    "charges": {
+      "n": 200,
+      "refunded": 0
+    },
+    "messages": 200,
+    "orders": {
+      "confirmed": 200
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "succeeded": 200
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 200
+    },
+    "violations": {}
+  },
+  "label": "exp-e3-outbox-r1",
+  "load_seconds": 6.1,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 2338.5,
+      "failures": 0,
+      "max_ms": 3739.9,
+      "p50_ms": 2492.3,
+      "p95_ms": 3430.5,
+      "p99_ms": 3589.7,
+      "requests": 1900,
+      "rps": 311.7
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 2480.8,
+      "failures": 0,
+      "max_ms": 3643.1,
+      "p50_ms": 2609.8,
+      "p95_ms": 3470.6,
+      "p99_ms": 3590.7,
+      "requests": 1500,
+      "rps": 246.1
+    },
+    "POST /api/orders": {
+      "avg_ms": 2453.4,
+      "failures": 0,
+      "max_ms": 3004.4,
+      "p50_ms": 2489.7,
+      "p95_ms": 2913.6,
+      "p99_ms": 2964.3,
+      "requests": 200,
+      "rps": 32.8
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 1156.3,
+      "failures": 0,
+      "max_ms": 3739.9,
+      "p50_ms": 812.0,
+      "p95_ms": 2975.5,
+      "p99_ms": 3620.7,
+      "requests": 200,
+      "rps": 32.8
+    },
+    "_errors": {},
+    "_extra": {
+      "reserve_journey_p50_ms": 2863.5,
+      "reserve_journey_p95_ms": 3540,
+      "shed_429": 0
+    }
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "admit_per_second": 150,
+    "catalog_ttl": 1,
+    "chaos": "none",
+    "chaos_at": 2.0,
+    "chaos_for": 6.0,
+    "claim_burst": 200,
+    "claim_rate": 300,
+    "driver": "k6",
+    "duration": 60,
+    "email_delay_ms": 300,
+    "events": 1,
+    "expect_oversell": false,
+    "gateway": false,
+    "gateway_port": 8091,
+    "hold_minutes": 10,
+    "label": "exp-e3-outbox-r1",
+    "mockpay_decline_rate": 0.0,
+    "mockpay_latency_ms": 0,
+    "mockpay_timeout_rate": 0.0,
+    "naive_delay_ms": 0,
+    "notify_inline": false,
+    "payments_service": false,
+    "pool_size": 10,
+    "port": 8090,
+    "queue_mode": "fifo",
+    "queue_rate": 600,
+    "refreshes": 0,
+    "scenario": "spike",
+    "seats": 200,
+    "spawn_rate": 0,
+    "strategy": "atomic_update",
+    "synchronous_commit": "on",
+    "threads": 40,
+    "users": 1500,
+    "waiting_room": false,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T05:34:19+00:00"
+}
