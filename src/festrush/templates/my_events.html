@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My events{% endblock %}
+{% block content %}
+<h1>My events</h1>
+
+{% if notice %}<p class="note {{ notice[0] }}" role="status">{{ notice[1] }}</p>{% endif %}
+
+{% if events %}
+  <div class="card">
+    <table>
+      <caption class="sr">Events you are registered for</caption>
+      <thead><tr><th scope="col">Event</th><th scope="col" class="num">Fee</th></tr></thead>
+      <tbody>
+        {% for e in events %}
+          <tr><td>{{ e.name }}</td><td class="num">₹{{ e.fee }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p><a class="btn" href="/checkout">Go to checkout</a></p>
+  </div>
+{% else %}
+  <div class="card">
+    <p>You haven't registered for anything yet.</p>
+    <p><a class="btn" href="/events">Browse events</a></p>
+  </div>
+{% endif %}
+{% endblock %}

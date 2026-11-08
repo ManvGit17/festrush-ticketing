@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Create account{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Create an account</h1>
+  {% if error %}<p class="note error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="/register" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Username
+      <input name="username" value="{{ username or '' }}" autocomplete="username" required
+             minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]+" aria-describedby="u-help">
+      <small id="u-help">3 to 32 characters: letters, digits, dot, dash, underscore.</small>
+    </label>
+    <label>Password
+      <input name="password" type="password" autocomplete="new-password" required
+             minlength="8" maxlength="128" aria-describedby="p-help">
+      <small id="p-help">At least 8 characters.</small>
+    </label>
+    <button class="btn" type="submit">Create account</button>
+  </form>
+  <p class="muted">Already registered? <a href="/login">Sign in</a></p>
+</section>
+{% endblock %}

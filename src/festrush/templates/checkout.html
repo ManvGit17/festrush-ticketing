@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Checkout{% endblock %}
+{% block content %}
+<h1>Checkout</h1>
+
+<div class="card narrow">
+  {% if events %}
+    <table>
+      <caption class="sr">What you owe</caption>
+      <thead><tr><th scope="col">Event</th><th scope="col" class="num">Fee</th></tr></thead>
+      <tbody>
+        {% for e in events %}
+          <tr><td>{{ e.name }}</td><td class="num">₹{{ e.fee }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><th scope="row">Total</th><td class="num total">₹{{ total }}</td></tr></tfoot>
+    </table>
+    <p class="muted">Online payment is not part of this release. This page shows what you owe
+      for the events you registered for.</p>
+  {% else %}
+    <p>Nothing to pay yet: you haven't registered for any event.</p>
+    <p><a class="btn" href="/events">Browse events</a></p>
+  {% endif %}
+</div>
+{% endblock %}
