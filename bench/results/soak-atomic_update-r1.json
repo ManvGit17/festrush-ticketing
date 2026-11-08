@@ -1,0 +1,110 @@
+{
+  "commit": "94d7802",
+  "database": {
+    "charges": {
+      "n": 450,
+      "refunded": 0
+    },
+    "messages": 422,
+    "orders": {
+      "confirmed": 422,
+      "payment_failed": 28
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "failed": 28,
+      "succeeded": 422
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 440,
+      "held": 10
+    },
+    "violations": {}
+  },
+  "label": "soak-atomic_update-r1",
+  "load_seconds": 60.91,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 367.5,
+      "failures": 0,
+      "max_ms": 3668.0,
+      "p50_ms": 250,
+      "p95_ms": 1000,
+      "p99_ms": 2700,
+      "requests": 14245,
+      "rps": 237.2
+    },
+    "GET /api/events/[id]": {
+      "avg_ms": 226.8,
+      "failures": 0,
+      "max_ms": 997.2,
+      "p50_ms": 210,
+      "p95_ms": 500,
+      "p99_ms": 690,
+      "requests": 6698,
+      "rps": 111.5
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 342.2,
+      "failures": 0,
+      "max_ms": 1888.4,
+      "p50_ms": 280,
+      "p95_ms": 850,
+      "p99_ms": 1200,
+      "requests": 6647,
+      "rps": 110.7
+    },
+    "POST /api/orders": {
+      "avg_ms": 871.3,
+      "failures": 0,
+      "max_ms": 1769.5,
+      "p50_ms": 840,
+      "p95_ms": 1400,
+      "p99_ms": 1600,
+      "requests": 450,
+      "rps": 7.5
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 2332.4,
+      "failures": 0,
+      "max_ms": 3668.0,
+      "p50_ms": 2200,
+      "p95_ms": 3300,
+      "p99_ms": 3600,
+      "requests": 450,
+      "rps": 7.5
+    },
+    "_errors": {}
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "duration": 60,
+    "events": 3,
+    "expect_oversell": false,
+    "hold_minutes": 1,
+    "label": "soak-atomic_update-r1",
+    "mockpay_decline_rate": 0.05,
+    "mockpay_latency_ms": 40,
+    "mockpay_timeout_rate": 0.05,
+    "naive_delay_ms": 0,
+    "pool_size": 10,
+    "port": 8090,
+    "scenario": "soak",
+    "seats": 150,
+    "spawn_rate": 0,
+    "strategy": "atomic_update",
+    "synchronous_commit": "on",
+    "users": 200,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T04:08:26+00:00"
+}

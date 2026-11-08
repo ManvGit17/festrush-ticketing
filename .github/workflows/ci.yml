@@ -25,8 +25,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run ruff format --check src tests scripts locust main.py
-      - run: uv run ruff check src tests scripts locust main.py
+      - run: uv run ruff format --check src tests scripts locust bench main.py
+      - run: uv run ruff check src tests scripts locust bench main.py
       - run: uv run mypy
 
   test:
@@ -99,6 +99,48 @@ jobs:
       - name: Stop
         if: always()
         run: docker compose down -v
+
+  concurrency:
+    name: Seat rush (300 students, 30 seats)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: festrush
+          POSTGRES_PASSWORD: festrush-dev
+          POSTGRES_DB: festrush_bench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U festrush -d festrush_bench"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      FESTRUSH_BENCH_DATABASE_URL: postgresql://festrush:festrush-dev@localhost:5432/festrush_bench
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Each safe strategy sells exactly the seats it has, and every invariant holds
+        run: |
+          for strategy in row_lock atomic_update skip_locked; do
+            uv run python bench/run.py --strategy "$strategy" --users 300 --seats 30               --web-workers 2 --label "ci-$strategy"
+          done
+      - name: The naive baseline oversells (the delay widens its race window, as a slow hop would)
+        run: |
+          uv run python bench/run.py --strategy naive --naive-delay-ms 5 --users 300 --seats 30             --web-workers 2 --expect-oversell --label ci-naive
+      - name: Retried writes (every request sent twice with the same key) take effect once
+        run: |
+          uv run python bench/run.py --strategy atomic_update --scenario retry-storm             --users 300 --seats 30 --web-workers 2 --label ci-storm
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: seat-rush-results
+          path: bench/results/
 
   audit:
     name: Dependency audit

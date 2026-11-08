@@ -33,14 +33,12 @@ def test_seeding_twice_does_not_duplicate_events(db: Db) -> None:
     assert row["n"] == len(services.SEED_EVENTS)
 
 
-def test_reseeding_never_lowers_capacity_below_seats_taken(db: Db, make_event: Any) -> None:
-    db.execute(
-        "INSERT INTO events (name, fee, capacity, seats_taken) VALUES ('Hackathon', 1, 200, 180)"
-    )
+def test_reseeding_never_lowers_capacity_below_claimed_seats(db: Db, make_event: Any) -> None:
+    db.execute("INSERT INTO events (name, fee, capacity, claimed) VALUES ('Hackathon', 1, 200, 180)")
     services.seed_events(db)
-    row = db.execute("SELECT capacity, seats_taken FROM events WHERE name = 'Hackathon'").fetchone()
+    row = db.execute("SELECT capacity, claimed FROM events WHERE name = 'Hackathon'").fetchone()
     assert row
-    assert row["capacity"] >= row["seats_taken"]
+    assert row["capacity"] >= row["claimed"]
 
 
 def test_seed_command_creates_demo_accounts_once(

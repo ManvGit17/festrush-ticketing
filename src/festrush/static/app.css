@@ -107,6 +107,7 @@ th, td { text-align: left; padding: .65rem .25rem; border-bottom: 1px solid var(
 .total { font-size: 1.3rem; font-weight: 800; }
 .code { font-size: 3rem; font-weight: 800; color: var(--muted); margin: 0; line-height: 1; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.gap { margin-top: 2rem; }
 .foot { color: var(--muted); font-size: .85rem; padding-bottom: 2rem; }
 
 @media (prefers-reduced-motion: no-preference) {

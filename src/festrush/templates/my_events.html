@@ -8,11 +8,19 @@
 {% if events %}
   <div class="card">
     <table>
-      <caption class="sr">Events you are registered for</caption>
-      <thead><tr><th scope="col">Event</th><th scope="col" class="num">Fee</th></tr></thead>
+      <caption class="sr">Seats you hold or own</caption>
+      <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col" class="num">Fee</th></tr></thead>
       <tbody>
         {% for e in events %}
-          <tr><td>{{ e.name }}</td><td class="num">₹{{ e.fee }}</td></tr>
+          <tr>
+            <td>{{ e.name }}</td>
+            <td>
+              {% if e.status == 'confirmed' %}Confirmed ✓
+              {% elif e.order_status == 'pending' %}Payment in progress
+              {% else %}On hold until {{ e.expires_at.strftime('%H:%M') }} UTC{% endif %}
+            </td>
+            <td class="num">₹{{ e.fee }}</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
@@ -20,7 +28,7 @@
   </div>
 {% else %}
   <div class="card">
-    <p>You haven't registered for anything yet.</p>
+    <p>You do not hold any seats yet.</p>
     <p><a class="btn" href="/events">Browse events</a></p>
   </div>
 {% endif %}

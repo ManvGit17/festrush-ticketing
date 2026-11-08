@@ -3,6 +3,7 @@
 #   db     PostgreSQL 18
 #   setup  applies migrations and loads the demo events and accounts, then exits
 #   app    the web app on http://localhost:8080
+#   worker the background worker (expired holds, confirmations, payment reconciliation)
 #
 # Copy .env.example to .env to change ports or passwords.
 
@@ -23,6 +24,7 @@ services:
       POSTGRES_DB: festrush
       POSTGRES_USER: festrush
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-festrush-dev}
+    command: ["postgres", "-c", "max_connections=300"]
     ports:
       - "${POSTGRES_PORT:-5440}:5432"
     volumes:
@@ -41,6 +43,21 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Releases expired holds, delivers confirmations and settles unfinished payments. Safe to kill.
+  worker:
+    <<: *app
+    command: ["festrush", "worker"]
+    restart: unless-stopped
+    healthcheck:
+      # No web server here; being able to reach the database is the useful signal.
+      test: ["CMD", "python", "-c", "import os, psycopg; psycopg.connect(os.environ['FESTRUSH_DATABASE_URL'], connect_timeout=3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
   app:
     <<: *app
     ports:
@@ -48,6 +65,24 @@ services:
     depends_on:
       setup:
         condition: service_completed_successfully
+
+  # The load tests, run inside the same Linux environment so results do not depend on the host:
+  #   docker compose --profile bench run --rm bench --strategy atomic_update --users 5000 --seats 200
+  # Results are written to ./bench/results.
+  bench:
+    profiles: ["bench"]
+    build:
+      context: .
+      target: bench
+    image: festrush-bench:local
+    environment:
+      FESTRUSH_BENCH_DATABASE_URL: postgresql://festrush:${POSTGRES_PASSWORD:-festrush-dev}@db:5432/festrush_bench
+      BENCH_COMMIT: ${BENCH_COMMIT:-unknown}
+    volumes:
+      - ./bench/results:/app/bench/results
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

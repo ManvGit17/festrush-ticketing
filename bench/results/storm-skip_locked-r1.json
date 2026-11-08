@@ -1,0 +1,97 @@
+{
+  "commit": "94d7802",
+  "database": {
+    "charges": {
+      "n": 200,
+      "refunded": 0
+    },
+    "messages": 200,
+    "orders": {
+      "confirmed": 200
+    },
+    "oversold_seats": 0,
+    "payments": {
+      "succeeded": 200
+    },
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "reservations": {
+      "confirmed": 200
+    },
+    "violations": {}
+  },
+  "label": "storm-skip_locked-r1",
+  "load_seconds": 65.9,
+  "locust": {
+    "Aggregated": {
+      "avg_ms": 36402.3,
+      "failures": 0,
+      "max_ms": 61386.4,
+      "p50_ms": 40000,
+      "p95_ms": 58000,
+      "p99_ms": 60000,
+      "requests": 10800,
+      "rps": 170.5
+    },
+    "POST /api/events/[id]/reserve": {
+      "avg_ms": 37682.6,
+      "failures": 0,
+      "max_ms": 61386.4,
+      "p50_ms": 43000,
+      "p95_ms": 59000,
+      "p99_ms": 60000,
+      "requests": 10000,
+      "rps": 157.8
+    },
+    "POST /api/orders": {
+      "avg_ms": 9942.2,
+      "failures": 0,
+      "max_ms": 35436.8,
+      "p50_ms": 7000,
+      "p95_ms": 29000,
+      "p99_ms": 35000,
+      "requests": 400,
+      "rps": 6.3
+    },
+    "POST /api/orders/[id]/pay": {
+      "avg_ms": 30855.5,
+      "failures": 0,
+      "max_ms": 40004.9,
+      "p50_ms": 33000,
+      "p95_ms": 40000,
+      "p99_ms": 40000,
+      "requests": 400,
+      "rps": 6.3
+    },
+    "_errors": {}
+  },
+  "machine": {
+    "cpu": "x86_64",
+    "logical_cpus": 22,
+    "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "postgres": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "python": "3.13.18"
+  },
+  "options": {
+    "duration": 60,
+    "events": 1,
+    "expect_oversell": false,
+    "hold_minutes": 10,
+    "label": "storm-skip_locked-r1",
+    "mockpay_decline_rate": 0.0,
+    "mockpay_latency_ms": 0,
+    "mockpay_timeout_rate": 0.0,
+    "naive_delay_ms": 0,
+    "pool_size": 10,
+    "port": 8090,
+    "scenario": "retry-storm",
+    "seats": 200,
+    "spawn_rate": 0,
+    "strategy": "skip_locked",
+    "synchronous_commit": "on",
+    "users": 5000,
+    "web_workers": 4
+  },
+  "settled": true,
+  "timed_out": false,
+  "when": "2026-11-08T04:07:16+00:00"
+}

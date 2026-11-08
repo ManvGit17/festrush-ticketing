@@ -11,13 +11,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import RedirectResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from festrush import __version__
 from festrush.config import Settings, get_settings
 from festrush.db import make_pool
 from festrush.deps import AppState, LoginRequired, current_user, render
-from festrush.routes import auth, events, health
+from festrush.mockpay import MockProvider
+from festrush.routes import api, auth, events, health
 from festrush.security import Csrf, Passwords
 
 log = logging.getLogger("festrush")
@@ -63,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             passwords=Passwords(insecure_fast=settings.insecure_fast_hashing),
             csrf=Csrf(settings.secret_key.get_secret_value()),
             templates=templates,
+            provider=MockProvider.from_settings(pool, settings),
         )
         try:
             yield
@@ -118,11 +120,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        if request.url.path.startswith("/api/"):
+            return _secure(JSONResponse({"error": str(exc.detail)}, status_code=exc.status_code))
         title, message = ERROR_TITLES.get(exc.status_code, ("Something went wrong", ""))
         return error_page(request, exc.status_code, title, message)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> Response:
+        if request.url.path.startswith("/api/"):
+            return _secure(JSONResponse({"error": "invalid_request"}, status_code=422))
         title, message = ERROR_TITLES[422]
         return error_page(request, 422, title, message)
 
@@ -134,6 +140,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request.url.path,
             exc_info=exc,
         )
+        if request.url.path.startswith("/api/"):
+            return _secure(JSONResponse({"error": "internal_error"}, status_code=500))
         return error_page(
             request,
             500,
@@ -147,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(events.router)
+    app.include_router(api.router)
 
     if settings.debug:
         # The lab's deliberate-crash demo, kept for the course exercise but off by default

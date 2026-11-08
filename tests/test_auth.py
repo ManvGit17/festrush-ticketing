@@ -139,9 +139,7 @@ def test_cookies_are_marked_secure_when_configured() -> None:
     with TC(create_app(make_settings(cookie_secure=True)), base_url="https://testserver") as c:
         signup(c)
         r = login(c)
-        cookie = next(
-            x for x in r.headers.get_list("set-cookie") if x.startswith("festrush_session")
-        )
+        cookie = next(x for x in r.headers.get_list("set-cookie") if x.startswith("festrush_session"))
         assert "Secure" in cookie
 
 

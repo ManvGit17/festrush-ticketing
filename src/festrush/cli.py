@@ -1,12 +1,14 @@
-"""Command line: ``festrush migrate | seed | serve``."""
+"""Command line: ``festrush migrate | seed | serve | worker | check | rebuild-inventory``."""
 
 import argparse
 import logging
 import os
+import sys
 
-from festrush import services
+from festrush import invariants, services, worker
 from festrush.config import Settings, get_settings
-from festrush.db import connect, migrate
+from festrush.db import connect, make_pool, migrate
+from festrush.mockpay import MockProvider
 from festrush.security import Passwords
 
 DEMO_USER_COUNT = 5
@@ -14,9 +16,7 @@ DEMO_USER_COUNT = 5
 
 def cmd_migrate(settings: Settings) -> None:
     applied = migrate(settings.database_url, settings.migrations_dir)
-    print(
-        f"applied {len(applied)} migration(s): {', '.join(applied) or 'none, already up to date'}"
-    )
+    print(f"applied {len(applied)} migration(s): {', '.join(applied) or 'none, already up to date'}")
 
 
 def cmd_seed(settings: Settings, demo_users: int) -> None:
@@ -36,7 +36,44 @@ def cmd_seed(settings: Settings, demo_users: int) -> None:
     print(f"seeded {events} events and {created} new demo account(s)")
 
 
-def cmd_serve(settings: Settings, host: str, port: int) -> None:
+def cmd_worker(settings: Settings) -> None:
+    """Run the background worker until interrupted. Safe to kill and restart at any time."""
+    pool = make_pool(settings.database_url, 1, 4)
+    print("worker started (Ctrl-C to stop)")
+    try:
+        worker.run_forever(pool, settings, MockProvider.from_settings(pool, settings))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pool.close()
+
+
+def cmd_check(settings: Settings) -> int:
+    """Run the invariants. Prints each check and returns 1 if any is violated."""
+    with connect(settings.database_url) as conn:
+        results = invariants.run_checks(conn)
+    failed = 0
+    for check in invariants.CHECKS:
+        rows = results[check.name]
+        mark = "ok  " if not rows else "FAIL"
+        print(f"{mark} {check.name}: {check.description}")
+        if rows:
+            failed += 1
+            for row in rows[:5]:
+                print(f"       {row}")
+    print(f"{len(invariants.CHECKS) - failed} of {len(invariants.CHECKS)} invariants hold")
+    return 1 if failed else 0
+
+
+def cmd_rebuild_inventory(settings: Settings) -> None:
+    """Rebuild seats and counters from the reservations (after changing strategy or capacity)."""
+    with connect(settings.database_url) as conn:
+        conn.execute("SELECT rebuild_inventory()")
+        conn.commit()
+    print("inventory rebuilt")
+
+
+def cmd_serve(settings: Settings, host: str, port: int, workers: int) -> None:
     import uvicorn
 
     uvicorn.run(
@@ -44,6 +81,7 @@ def cmd_serve(settings: Settings, host: str, port: int) -> None:
         factory=True,
         host=host,
         port=port,
+        workers=workers,
         proxy_headers=True,
         forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"),
     )
@@ -63,6 +101,10 @@ def main(argv: list[str] | None = None) -> None:
     serve = sub.add_parser("serve", help="run the web server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8080)
+    serve.add_argument("--workers", type=int, default=1, help="server processes")
+    sub.add_parser("worker", help="run the background worker (holds, outbox, payments)")
+    sub.add_parser("check", help="check the invariants; exit 1 if any fails")
+    sub.add_parser("rebuild-inventory", help="rebuild seats and counters from reservations")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -71,8 +113,14 @@ def main(argv: list[str] | None = None) -> None:
         cmd_migrate(settings)
     elif args.command == "seed":
         cmd_seed(settings, args.demo_users)
+    elif args.command == "worker":
+        cmd_worker(settings)
+    elif args.command == "check":
+        sys.exit(cmd_check(settings))
+    elif args.command == "rebuild-inventory":
+        cmd_rebuild_inventory(settings)
     else:
-        cmd_serve(settings, args.host, args.port)
+        cmd_serve(settings, args.host, args.port, args.workers)
 
 
 if __name__ == "__main__":
