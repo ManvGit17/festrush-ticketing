@@ -15,10 +15,12 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from festrush import inventory
+from festrush import inventory, metrics
 from festrush.config import Settings
 from festrush.db import Conn, Pool, one
-from festrush.mockpay import MockProvider, ProviderTimeout
+from festrush.mockpay import ProviderTimeout
+from festrush.payments_service import Provider, ProviderUnavailable
+from festrush.tracing import tracer
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +88,7 @@ def get_order(conn: Conn, order_id: int, user_id: int | None = None) -> dict[str
     return order
 
 
-def run_payment(pool: Pool, provider: MockProvider, order_id: int) -> str:
+def run_payment(pool: Pool, provider: Provider, order_id: int) -> str:
     """Charge the order. Safe to call any number of times, concurrently.
 
     Only the caller that flips the payment from 'initiated' to 'processing' talks to the provider;
@@ -105,7 +107,8 @@ def run_payment(pool: Pool, provider: MockProvider, order_id: int) -> str:
             return str(current["status"]) if current else "missing"
 
     try:
-        outcome = provider.charge(won["provider_key"], won["amount"])
+        with tracer.start_as_current_span("payments.charge"):
+            outcome = provider.charge(won["provider_key"], won["amount"])
     except ProviderTimeout:
         with pool.connection() as conn:
             conn.execute(
@@ -118,7 +121,7 @@ def run_payment(pool: Pool, provider: MockProvider, order_id: int) -> str:
         return apply_payment_outcome(conn, provider, int(won["id"]), outcome)
 
 
-def apply_payment_outcome(conn: Conn, provider: MockProvider, payment_id: int, outcome: str | None) -> str:
+def apply_payment_outcome(conn: Conn, provider: Provider, payment_id: int, outcome: str | None) -> str:
     """Record what the provider says happened. Idempotent.
 
     ``outcome`` is 'succeeded', 'declined', or None when the provider has no record of the charge
@@ -146,6 +149,7 @@ def apply_payment_outcome(conn: Conn, provider: MockProvider, payment_id: int, o
             conn.execute("UPDATE orders SET status = 'payment_failed' WHERE id = %s", (order["id"],))
             # The seats go back to being plain holds, so the student can try another order.
             conn.execute("UPDATE reservations SET order_id = NULL WHERE order_id = %s", (order["id"],))
+        metrics.PAYMENTS.labels("failed").inc()
         return "failed"
 
     # The provider took the money.
@@ -169,6 +173,7 @@ def apply_payment_outcome(conn: Conn, provider: MockProvider, payment_id: int, o
             "order.confirmed",
             {"order_id": int(order["id"]), "user_id": int(order["user_id"])},
         )
+        metrics.PAYMENTS.labels("succeeded").inc()
         return "succeeded"
 
     # The money arrived but the seats are gone (the order expired first): give it back.
@@ -177,10 +182,11 @@ def apply_payment_outcome(conn: Conn, provider: MockProvider, payment_id: int, o
         conn.execute("UPDATE orders SET status = 'refunded' WHERE id = %s", (order["id"],))
     provider.refund(payment["provider_key"])
     emit(conn, "order.refunded", {"order_id": int(order["id"]), "user_id": int(order["user_id"])})
+    metrics.PAYMENTS.labels("refunded").inc()
     return "refunded"
 
 
-def reconcile_payments(pool: Pool, provider: MockProvider, settings: Settings, limit: int = 50) -> int:
+def reconcile_payments(pool: Pool, provider: Provider, settings: Settings, limit: int = 50) -> int:
     """Ask the provider about payments that have sat unsettled too long, and apply the answer.
 
     Covers a lost response (timeout) and a web process that died between taking the right to
@@ -194,7 +200,11 @@ def reconcile_payments(pool: Pool, provider: MockProvider, settings: Settings, l
         ).fetchall()
     settled = 0
     for payment in stuck:
-        outcome = provider.lookup(payment["provider_key"])
+        try:
+            outcome = provider.lookup(payment["provider_key"])
+        except ProviderUnavailable:
+            log.warning("payment provider unreachable; will ask again later")
+            return settled
         with pool.connection() as conn:
             if apply_payment_outcome(conn, provider, int(payment["id"]), outcome) in SETTLED:
                 settled += 1
@@ -203,4 +213,6 @@ def reconcile_payments(pool: Pool, provider: MockProvider, settings: Settings, l
 
 def expire_stale(pool: Pool, settings: Settings) -> int:
     with pool.connection() as conn:
-        return inventory.expire_holds(conn, settings)
+        expired = inventory.expire_holds(conn, settings)
+    metrics.HOLDS_EXPIRED.inc(expired)
+    return expired

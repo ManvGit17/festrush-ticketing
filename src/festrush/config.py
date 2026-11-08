@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # set to true behind HTTPS
     session_hours: int = Field(default=12, ge=1)
 
+    # Threads each web process uses to run the (synchronous) route handlers. The default is
+    # anyio's 40. See docs/architecture.md, experiment E0, for what changing it does.
+    threadpool_size: int = Field(default=40, ge=1)
+
     pool_min_size: int = Field(default=2, ge=1)
     pool_max_size: int = Field(default=20, ge=1)
 
@@ -40,11 +44,26 @@ class Settings(BaseSettings):
     # or extra business logic would. Only the naive strategy reads it.
     naive_delay_ms: int = Field(default=0, ge=0)
 
+    # The waiting room: off by default. When on, students must be admitted before they can reserve.
+    waiting_room_enabled: bool = False
+    waiting_room_mode: Literal["fifo", "lottery"] = "fifo"
+    waiting_room_admit_per_second: int = Field(default=100, ge=1)
+    waiting_room_admit_minutes: int = Field(default=5, ge=1)
+
     hold_minutes: int = Field(default=10, ge=1)
     # A hold with a payment in flight is kept this long past its expiry before it is released.
     payment_grace_seconds: int = Field(default=120, ge=0)
     # How long a payment may sit unsettled before the worker asks the provider what happened.
     payment_reconcile_seconds: int = Field(default=30, ge=0)
+
+    # Send traces here (an OTLP/HTTP endpoint such as http://jaeger:4318). Unset means no tracing.
+    otlp_endpoint: str | None = None
+    worker_metrics_port: int = Field(default=9102, ge=1)
+
+    # Set to use the payments service instead of the in-process mock provider.
+    payments_url: str | None = None
+    payments_timeout_seconds: float = Field(default=3.0, gt=0)
+    payments_port: int = Field(default=8070, ge=1)
 
     # The mock payment provider. Rates are fractions between 0 and 1; outcomes are decided by
     # the idempotency key, so a retry of the same payment always gets the same answer.

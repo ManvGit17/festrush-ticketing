@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from starlette.responses import RedirectResponse, Response
 
-from festrush import inventory, orders, services
+from festrush import inventory, orders, services, waitingroom
 from festrush.deps import connection, current_user, render, require_user, state, verify_csrf
 from festrush.idempotency import request_hash, run_idempotent
 from festrush.inventory import Outcome
@@ -47,6 +47,10 @@ def register_event(request: Request, event_id: int) -> Response:
     """Hold a seat. (The name is kept from v1; what it does now is reserve, not register.)"""
     user = require_user(request)
     st = state(request)
+    if st.settings.waiting_room_enabled:
+        with connection(request) as conn:
+            if not waitingroom.is_admitted(conn, user["id"]):
+                return RedirectResponse("/queue", status_code=303)
     with connection(request) as conn:
         result = inventory.reserve(conn, st.settings, user["id"], event_id)
     if result.outcome is Outcome.NO_EVENT:
@@ -114,3 +118,20 @@ def order_page(request: Request, order_id: int) -> Response:
     if order is None:
         raise HTTPException(status_code=404, detail="no such order")
     return render(request, "order.html", user, order=order, messages=messages)
+
+
+@router.get("/queue")
+def queue_page(request: Request) -> Response:
+    user = require_user(request)
+    st = state(request)
+    with connection(request) as conn:
+        info = waitingroom.status(conn, st.settings, user["id"])
+    return render(request, "queue.html", user, info=info, enabled=st.settings.waiting_room_enabled)
+
+
+@router.post("/queue/join", dependencies=[Depends(verify_csrf)])
+def queue_join(request: Request) -> Response:
+    user = require_user(request)
+    with connection(request) as conn:
+        waitingroom.join(conn, user["id"])
+    return RedirectResponse("/queue", status_code=303)

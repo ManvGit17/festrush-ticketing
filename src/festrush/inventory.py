@@ -26,8 +26,10 @@ from typing import Any
 
 import psycopg.errors
 
+from festrush import metrics
 from festrush.config import Settings
 from festrush.db import Conn, one
+from festrush.tracing import tracer
 
 STRATEGIES = ("naive", "row_lock", "atomic_update", "skip_locked")
 
@@ -148,6 +150,16 @@ def _skip_locked(conn: Conn, user_id: int, event_id: int, hold: timedelta) -> Re
 
 
 def reserve(conn: Conn, settings: Settings, user_id: int, event_id: int) -> Reserved:
+    """Hold one seat for a user: counted, and traced as a span named after the strategy."""
+    with tracer.start_as_current_span("inventory.reserve") as span:
+        span.set_attribute("festrush.strategy", settings.inventory_strategy)
+        result = _reserve(conn, settings, user_id, event_id)
+        span.set_attribute("festrush.outcome", result.outcome.value)
+    metrics.RESERVATIONS.labels(settings.inventory_strategy, result.outcome.value).inc()
+    return result
+
+
+def _reserve(conn: Conn, settings: Settings, user_id: int, event_id: int) -> Reserved:
     """Hold one seat for a user. Atomic: either the hold exists afterwards, or nothing changed.
 
     Needs a connection with no statement run on it yet in this transaction, or one inside a
