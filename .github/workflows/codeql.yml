@@ -14,7 +14,10 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # A job-level block replaces the top-level one, so contents must be listed again.
     permissions:
+      contents: read
+      actions: read
       security-events: write
     strategy:
       fail-fast: false
