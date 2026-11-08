@@ -38,9 +38,7 @@ def test_stylesheet_is_served_locally(client: TestClient) -> None:
 
 def test_errors_do_not_show_exception_text() -> None:
     # S5: v1 rendered str(exc) into the error page.
-    with TestClient(
-        create_app(make_settings(debug=True)), raise_server_exceptions=False
-    ) as debug_client:
+    with TestClient(create_app(make_settings(debug=True)), raise_server_exceptions=False) as debug_client:
         r = debug_client.get("/_debug/crash")
     assert r.status_code == 500
     assert "debug crash" not in r.text

@@ -6,6 +6,7 @@ Start the database with ``docker compose up -d db`` (port 5440). CI points
 
 import os
 import re
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -64,10 +65,7 @@ def schema() -> None:
 @pytest.fixture(autouse=True)
 def clean_tables(schema: None) -> None:
     with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
-        conn.execute(
-            "TRUNCATE users, sessions, events, registrations, login_failures"
-            " RESTART IDENTITY CASCADE"
-        )
+        conn.execute("TRUNCATE users, events, outbox, mock_charges, login_failures RESTART IDENTITY CASCADE")
 
 
 @pytest.fixture
@@ -83,9 +81,7 @@ def client(settings: Settings) -> Iterator[TestClient]:
 
 @pytest.fixture
 def db() -> Iterator[Db]:
-    with psycopg.connect(
-        TEST_DATABASE_URL, autocommit=True, row_factory=psycopg.rows.dict_row
-    ) as c:
+    with psycopg.connect(TEST_DATABASE_URL, autocommit=True, row_factory=psycopg.rows.dict_row) as c:
         yield c
 
 
@@ -137,3 +133,40 @@ def user_client(client: TestClient) -> TestClient:
     assert signup(client).status_code == 303
     assert login(client).status_code == 303
     return client
+
+
+@pytest.fixture
+def make_user(db: Db) -> Any:
+    """Insert a user directly (no hashing) and return its id."""
+
+    def _make(name: str = "student") -> int:
+        row = db.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'x') RETURNING id", (name,)
+        ).fetchone()
+        assert row
+        return int(row["id"])
+
+    return _make
+
+
+@pytest.fixture
+def make_token(db: Db) -> Any:
+    """Mint a session token for a user, the way the load tests do."""
+    from festrush.security import hash_token
+
+    def _make(user_id: int) -> str:
+        token = f"token-{user_id}-{uuid.uuid4().hex}"
+        db.execute(
+            "INSERT INTO sessions (token_hash, user_id, expires_at)"
+            " VALUES (%s, %s, now() + interval '1 hour')",
+            (hash_token(token), user_id),
+        )
+        return token
+
+    return _make
+
+
+@pytest.fixture
+def app_state(client: TestClient) -> Any:
+    """The running app's pool, provider and settings."""
+    return client.app.state.festrush  # type: ignore[attr-defined]

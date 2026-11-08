@@ -19,9 +19,7 @@ Connect = Callable[[], sqlite3.Connection]
 
 
 def signup(client: TestClient, username: str = "asha", password: str = "pw-asha") -> None:
-    r = client.post(
-        "/register", data={"username": username, "password": password}, follow_redirects=False
-    )
+    r = client.post("/register", data={"username": username, "password": password}, follow_redirects=False)
     assert r.status_code == 302
 
 
@@ -35,14 +33,10 @@ def test_startup_creates_the_three_tables(client: TestClient, connect: Connect) 
 
 def test_registrations_have_no_keys_or_constraints(client: TestClient, connect: Connect) -> None:
     # BUG (D1, A6): no primary key, no foreign keys, no uniqueness, no capacity column.
-    sql = (
-        connect().execute("SELECT sql FROM sqlite_master WHERE name='registrations'").fetchone()[0]
-    )
+    sql = connect().execute("SELECT sql FROM sqlite_master WHERE name='registrations'").fetchone()[0]
     assert "PRIMARY KEY" not in sql.upper()
     assert "REFERENCES" not in sql.upper()
-    events_sql = (
-        connect().execute("SELECT sql FROM sqlite_master WHERE name='events'").fetchone()[0]
-    )
+    events_sql = connect().execute("SELECT sql FROM sqlite_master WHERE name='events'").fetchone()[0]
     assert "capacity" not in events_sql.lower() and "seats" not in events_sql.lower()
 
 
@@ -72,9 +66,7 @@ def test_password_is_stored_in_plaintext(client: TestClient, connect: Connect) -
 def test_login_success_puts_the_username_in_the_url(client: TestClient) -> None:
     # BUG (S2): identity is a query parameter; there is no session.
     signup(client)
-    r = client.post(
-        "/login", data={"username": "asha", "password": "pw-asha"}, follow_redirects=False
-    )
+    r = client.post("/login", data={"username": "asha", "password": "pw-asha"}, follow_redirects=False)
     assert r.status_code == 302
     assert r.headers["location"] == "/events?user=asha"
     assert "set-cookie" not in r.headers
@@ -89,16 +81,12 @@ def test_login_failure_rerenders_with_error(client: TestClient) -> None:
 
 def test_login_is_not_sql_injectable(client: TestClient) -> None:
     signup(client)
-    r = client.post(
-        "/login", data={"username": "asha' --", "password": "x"}, follow_redirects=False
-    )
+    r = client.post("/login", data={"username": "asha' --", "password": "x"}, follow_redirects=False)
     assert r.status_code == 200
     assert "Invalid username or password" in r.text
 
 
-def test_empty_username_and_password_create_an_account(
-    client: TestClient, connect: Connect
-) -> None:
+def test_empty_username_and_password_create_an_account(client: TestClient, connect: Connect) -> None:
     # BUG (S6): no validation. On the dependency versions the lab was written against, empty
     # strings satisfy ``Form(...)``, so an account with a blank name and password is created.
     # (Newer FastAPI releases answer 422 here, which would hide the problem.)
