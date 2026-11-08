@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def markdown_files() -> list[Path]:
     """Tracked and new Markdown files; ignored working files are left out."""
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603, S607 - fixed arguments, git from PATH
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md"],
         cwd=ROOT,
         capture_output=True,
