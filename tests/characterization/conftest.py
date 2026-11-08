@@ -1,6 +1,6 @@
 """Fixtures for the characterization suite.
 
-These tests pin the behaviour of the original monolith (v1, commit fe966d8), which now lives
+These tests pin the behaviour of the original monolith (v1, commit 1f57f1a), which now lives
 unchanged in ``legacy/v1``, exactly as it is, bugs included. A test marked ``BUG`` documents a
 defect from docs/audit.md. The rebuilt app has its own tests for each fixed finding; this suite
 stays as the record of what v1 did and runs against the dependency versions v1 was written for

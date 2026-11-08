@@ -1,6 +1,6 @@
 # MonolithicApplication: Project Audit
 
-_Audited on 2026-11-08 against commit `fe966d8` (`main`, "CC Lab 2 monolithic architecture")._
+_Audited on 2026-11-08 against commit `1f57f1a` ("CC Lab 2 monolithic architecture", the lab submission)._
 
 ## 1. What the project is
 
@@ -164,7 +164,7 @@ pinned in `tests/characterization/` against `legacy/v1/`.
 | S1 | Fixed | Argon2id hashes (`test_password_is_hashed_with_argon2id`) |
 | S2 | Fixed | Server-side sessions, `POST` for writes, CSRF tokens, `?user=` ignored (`test_anonymous_visitors_are_sent_to_sign_in_not_to_a_registration`, `test_the_user_query_parameter_no_longer_means_anything`) |
 | S3 | **Open, your call** | The SRN is still at `main.py` line 8-ish, untouched, until you decide. The username/password row is gone from the working tree, but still exists in git history (history is not rewritten) |
-| S4 | Fixed | `fest.db` removed from the tree and `*.db` ignored. The file remains in history at `fe966d8` |
+| S4 | Fixed | `fest.db` removed from the tree and `*.db` ignored. The file remains in history at `1f57f1a` |
 | S5 | Fixed | Error pages show a request ID, never exception text (`test_errors_do_not_show_exception_text`) |
 | S6 | Fixed | Username and password rules (`test_empty_and_malformed_credentials_are_rejected`) |
 | S7 | Partly fixed | Login throttling per (username, client), CSRF and security headers are in. Sign-up still says when a username is taken, which is a usability trade-off |
