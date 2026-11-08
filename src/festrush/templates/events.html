@@ -23,6 +23,7 @@
         {% if left <= 0 %}Sold out{% else %}{{ left }} of {{ e.capacity }} seats left{% endif %}
       </p>
       {% if user %}
+        <p><a href="/events/{{ e.id }}/live">Live seat map</a></p>
         {% if e.id in mine %}
           <p class="badge">{% if mine[e.id] == 'confirmed' %}Confirmed ✓{% else %}On hold{% endif %}</p>
         {% elif left <= 0 %}

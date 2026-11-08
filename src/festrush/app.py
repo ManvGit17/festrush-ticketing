@@ -20,7 +20,7 @@ from festrush.config import Settings, get_settings
 from festrush.db import make_pool
 from festrush.deps import AppState, LoginRequired, current_user, render
 from festrush.payments_service import make_provider
-from festrush.routes import api, auth, events, health
+from festrush.routes import api, auth, events, health, live
 from festrush.security import Csrf, Passwords
 
 log = logging.getLogger("festrush")
@@ -167,6 +167,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(events.router)
+    app.include_router(live.router)
     app.include_router(api.router)
 
     if settings.debug:

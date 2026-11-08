@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ snap.name }} · live{% endblock %}
+{% block content %}
+<h1>{{ snap.name }}</h1>
+<p id="summary" role="status" aria-live="polite">{{ snap.free }} of {{ snap.capacity }} seats free.</p>
+<ul class="legend" aria-label="Legend">
+  <li><span class="seat free"></span> Free</li>
+  <li><span class="seat held"></span> Held</li>
+  <li><span class="seat sold"></span> Sold</li>
+  <li><span class="seat sold mine"></span> Yours</li>
+</ul>
+<div id="seatmap" class="seatmap" data-event="{{ event_id }}" data-csrf="{{ csrf_token }}" role="list" aria-label="Seat map">
+  {% for c in snap.cells %}<span class="seat {{ c.replace('_', ' ') | replace('mine held', 'mine held') }}" role="listitem" aria-label="{{ c.replace('_', ' ') }}"></span>{% endfor %}
+</div>
+{% if user %}
+<p><button id="hold" class="btn" type="button">Hold a seat</button>
+<a class="btn small" href="/checkout">Checkout</a> <a class="btn small" href="/queue">Waiting room</a></p>
+<p id="msg" role="status"></p>
+{% else %}<p><a class="btn" href="/login">Sign in to hold a seat</a></p>{% endif %}
+{% endblock %}
