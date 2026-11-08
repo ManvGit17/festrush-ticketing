@@ -7,4 +7,3 @@ The application itself lives in ``src/festrush``. The original v1 code is preser
 from festrush.app import create_app
 
 app = create_app()
-SRN = "PES1UG23CS349"

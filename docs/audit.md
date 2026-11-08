@@ -1,6 +1,6 @@
 # MonolithicApplication: Project Audit
 
-_Audited on 2026-11-08 against GitHub `main` (`78d9351`, "Monolithic architecture") plus the original author's local edits, which are recorded in commit `b9aeaa2`: the SRN line, three wording changes in templates, and a `fest.db` that was never committed._
+_Audited on 2026-11-08 against GitHub `main` (`78d9351`, "Monolithic architecture") plus the original author's local edits, which are recorded in commit `b9aeaa2`: a hardcoded student identifier, three wording changes in templates, and a `fest.db` that was never committed._
 
 ## 1. What the project is
 
@@ -147,7 +147,7 @@ rebuilt app; the rebuild's benchmarks will come from the load-test scripts added
    can show an oversell happen and then show it cannot.
 3. **The Locust files are worth keeping** but need real users, unique registrations and a host
    (A10), so they test the journeys instead of one growing table.
-4. **Things the original brief may require** (SRN in `main.py`, the four Locust files and their paths, the
+4. **Things the original brief may require** (the four Locust files and their paths, the
    `/events`, `/register_event/{id}`, `/my-events`, `/checkout` routes, a monolithic structure) are
    listed as questions in [roadmap.md](roadmap.md#decisions-needed) and are kept working until
    answered.
@@ -163,7 +163,7 @@ pinned in `tests/characterization/` against `legacy/v1/`.
 | :-- | :-- | :-- |
 | S1 | Fixed | Argon2id hashes (`test_password_is_hashed_with_argon2id`) |
 | S2 | Fixed | Server-side sessions, `POST` for writes, CSRF tokens, `?user=` ignored (`test_anonymous_visitors_are_sent_to_sign_in_not_to_a_registration`, `test_the_user_query_parameter_no_longer_means_anything`) |
-| S3 | **Open: decision pending** | The SRN is still at `main.py` line 8-ish, untouched, until that is decided. The username/password row existed only in the local `fest.db`, which is no longer in the tree |
+| S3 | Fixed in the tree | The hardcoded student identifier is removed from `main.py` and from the archived `legacy/v1/main.py` (`test_no_student_identifier_is_hardcoded_in_the_source` guards it). Earlier commits in the history still contain it. The username/password row existed only in the local `fest.db`, which is no longer in the tree |
 | S4 | Fixed | `*.db` is ignored and the database file is no longer in the project folder. It never reached GitHub's `main` |
 | S5 | Fixed | Error pages show a request ID, never exception text (`test_errors_do_not_show_exception_text`) |
 | S6 | Fixed | Username and password rules (`test_empty_and_malformed_credentials_are_rejected`) |

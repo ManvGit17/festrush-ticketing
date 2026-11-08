@@ -1,5 +1,7 @@
 # FestRush
 
+> **New here? Read [START_HERE.md](START_HERE.md):** how to run it, where to read, and the running log of updates.
+
 College-fest ticketing that is meant to never oversell, and to prove it under load.
 
 FestRush began as a small project covering a few cloud-computing topics: one FastAPI app for a
@@ -100,7 +102,7 @@ uv run locust -f locust/locust/journey_locustfile.py --host http://localhost:808
 | `tests/` | Tests against PostgreSQL; `tests/characterization/` pins v1 |
 | `locust/` | Load tests for each page journey (kept from the original version) |
 | `bench/` | The seat-rush benchmark: scenarios, runner, results and summary script |
-| `legacy/v1/` | The original version, unchanged |
+| `legacy/v1/` | The original version, unchanged apart from one removed hardcoded identifier |
 | `docs/` | Audit, research and roadmap |
 
 ## License
