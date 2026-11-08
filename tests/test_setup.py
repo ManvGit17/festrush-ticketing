@@ -1,6 +1,7 @@
 """Migrations, seeding, the CLI and the root entry point."""
 
 import importlib
+import re
 import sys
 from typing import Any
 
@@ -70,7 +71,13 @@ def test_the_root_entry_point_still_exposes_app_and_the_srn(
     sys.modules.pop("main", None)
     main = importlib.import_module("main")
     assert hasattr(main, "app")
-    assert main.SRN == "PES1UG23CS349"
+    original = re.search(
+        r'^SRN = "([^"]+)"',
+        (REPO_ROOT / "legacy" / "v1" / "main.py").read_text(encoding="utf-8"),
+        re.M,
+    )
+    assert original
+    assert original.group(1) == main.SRN
     get_settings.cache_clear()
     sys.modules.pop("main", None)
 

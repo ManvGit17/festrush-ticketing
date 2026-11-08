@@ -210,7 +210,7 @@ These are yours to make before I start building. Defaults are my recommendation.
    must work unauthenticated with `?user=`, that conflicts with fixing S2.
    _Default:_ keep every route name and the four Locust file names and paths, and update the
    Locust files to log in; the old `?user=` form is not kept. Tell me if the grader needs it.
-2. **The SRN in `main.py` (`PES1UG23CS349`).** It is unused by the code. Options: keep it exactly
+2. **The SRN in `main.py`.** It is unused by the code. Options: keep it exactly
    where it is; move it into configuration (`FEST_SRN`) and show it in the page footer; or remove
    it. _Default:_ I do not touch it until you answer. Note it is also the username and password
    in the lab folder's `fest.db`, which is not on GitHub and which I removed from the working tree.
