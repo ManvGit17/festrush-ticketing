@@ -32,9 +32,14 @@ from festrush.mockpay import MockProvider, Outcome, ProviderTimeout
 class Provider(Protocol):
     """What the app needs from a payment provider. MockProvider and HttpProvider both fit."""
 
-    def charge(self, key: str, amount: int) -> Outcome: ...
-    def lookup(self, key: str) -> Outcome | None: ...
-    def refund(self, key: str) -> None: ...
+    def charge(self, key: str, amount: int) -> Outcome:
+        """Charge once per key; ProviderTimeout when the answer is lost."""
+
+    def lookup(self, key: str) -> Outcome | None:
+        """What happened to this charge? None when the provider never saw the key."""
+
+    def refund(self, key: str) -> None:
+        """Give the money back. Safe to repeat."""
 
 
 def _trace_headers(headers: dict[str, str]) -> dict[str, str]:

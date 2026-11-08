@@ -308,7 +308,8 @@ def probe_recovery(args: argparse.Namespace) -> float | None:
                 if r.status == 200:
                     return round(time.monotonic() - started, 1)
         except OSError:
-            pass
+            time.sleep(0.25)  # not up yet: look again shortly
+            continue
         time.sleep(0.25)
     return None
 
@@ -488,6 +489,7 @@ def main() -> int:
     env = child_env(args)
     event_ids = ",".join(str(i) for i in range(1, (args.events if args.scenario == "soak" else 1) + 1))
 
+    web_log = open(os.environ["BENCH_WEB_LOG"], "w") if os.environ.get("BENCH_WEB_LOG") else None  # noqa: SIM115
     web = subprocess.Popen(
         [
             sys.executable,
@@ -502,10 +504,8 @@ def main() -> int:
         cwd=REPO_ROOT,
         env=env,
         # BENCH_WEB_LOG=<file> keeps the web server's output, for working out why a run failed.
-        stdout=open(os.environ["BENCH_WEB_LOG"], "w")  # noqa: SIM115
-        if os.environ.get("BENCH_WEB_LOG")
-        else subprocess.DEVNULL,
-        stderr=subprocess.STDOUT if os.environ.get("BENCH_WEB_LOG") else subprocess.DEVNULL,
+        stdout=web_log or subprocess.DEVNULL,
+        stderr=subprocess.STDOUT if web_log else subprocess.DEVNULL,
     )
     background = subprocess.Popen(
         [sys.executable, "-m", "festrush", "worker"], cwd=REPO_ROOT, env=env, stdout=subprocess.DEVNULL
@@ -571,6 +571,8 @@ def main() -> int:
         recovery_seconds = probe_recovery(args) if args.chaos != "none" else None
         settled = settle(args, 150 if args.chaos != "none" else 90)
     finally:
+        if web_log is not None:
+            web_log.close()
         chaos.cancel()
         if gateway is not None:
             stop(gateway)
