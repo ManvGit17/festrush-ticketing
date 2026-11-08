@@ -1,6 +1,6 @@
 # MonolithicApplication: Project Audit
 
-_Audited on 2026-11-08 against commit `1f57f1a` ("CC Lab 2 monolithic architecture", the lab submission)._
+_Audited on 2026-11-08 against GitHub `main` (`78d9351`, "Monolithic architecture") plus the lab working copy's local edits, which are recorded in commit `b9aeaa2`: the SRN line, three wording changes in templates, and a `fest.db` that was never committed to GitHub._
 
 ## 1. What the project is
 
@@ -17,7 +17,7 @@ pages are server-rendered Jinja templates, and four Locust files load-test the u
 | Templates (Tailwind via CDN) | `templates/*.html` (7 files) | 361 |
 | Load tests | `locust/*.py`, `locust/locust/journey_locustfile.py` (4 files) | 44 |
 | Dependencies | `requirements.txt` | 6 |
-| Committed database | `fest.db` | 24 KB |
+| Database in the lab working copy (not on GitHub's `main`) | `fest.db` | 24 KB |
 
 Line counts: `wc -l main.py database.py checkout/__init__.py insert_events.py templates/*.html locust/*.py locust/locust/*.py`.
 
@@ -49,9 +49,9 @@ Everything in section 5 was reproduced, not guessed:
    including the bugs. Run it with the pinned versions in
    `tests/characterization/requirements-legacy.txt`:
    `pytest tests/characterization`.
-4. Ran `scripts/audit_probe_v1.py` against a scratch copy of v1 (never the committed database) to
+4. Ran `scripts/audit_probe_v1.py` against a scratch copy of v1 (never a real database) to
    measure the concurrency findings.
-5. Opened `fest.db` and listed its schema and rows.
+5. Opened the lab working copy's `fest.db` and listed its schema and rows.
 
 Evidence column: `file:line` points at the code, `test` names a characterization test that fails if
 the finding is fixed (each test flips in the commit that fixes its finding).
@@ -78,8 +78,8 @@ data loss or an exploitable hole, **Medium** = misleading or fragile, **Low** = 
 | :-- | :-- | :-- | :-- |
 | S1 | Critical | **Passwords are stored and compared in plaintext.** | `main.py:30`, `main.py:45-48`; `test_password_is_stored_in_plaintext` |
 | S2 | Critical | **There is no authentication after login.** Identity is the `?user=` query string, so anyone can view or act as any user by typing a name. State-changing registration is a `GET`, so a link, an image tag or a browser prefetch registers someone. | `main.py:56`, `main.py:61`, `main.py:76-84`; `test_login_success_puts_the_username_in_the_url`, `test_register_for_event_without_logging_in` |
-| S3 | High | **Personal data in source and data.** The student SRN `PES1UG23CS349` is hardcoded and unused (nothing reads `SRN`). The same string is also the username and the password of the only row in `users`. | `main.py:8`; `fest.db` `users` table |
-| S4 | High | **The database is committed.** `fest.db` is tracked, so every clone carries a real account and every run of the app dirties the working tree. `.gitignore` does not list it. | `git ls-files fest.db`; `.gitignore` |
+| S3 | High | **Personal data in source and data.** The student SRN `PES1UG23CS349` is hardcoded and unused (nothing reads `SRN`) in the lab working copy; GitHub's `main` did not have the line until this branch. The same string is also the username and the password of the only row in the lab copy's `users` table. | `main.py:8`; `fest.db` `users` table |
+| S4 | Medium | **Nothing stops the database being committed.** The lab folder holds a live `fest.db` with a real account in it, `.gitignore` does not list it, and every run of the app rewrites it. (It is not on GitHub's `main`; it was only in a local snapshot commit.) | `git ls-files fest.db`; `.gitignore` |
 | S5 | Medium | **Exception text is shown to users.** The global handler renders `str(exc)` into the error page. | `main.py:118-132`, `templates/error.html:20`; `test_event_404_is_a_deliberate_crash` |
 | S6 | Medium | **No input validation.** Empty usernames and passwords create accounts on the lab's dependency versions (newer FastAPI happens to answer 422 and hide this). No length limit, no password rules. | `main.py:27`; `test_empty_username_and_password_create_an_account` |
 | S7 | Medium | **No abuse controls.** No rate limit or lockout on login, no CSRF defence, no security headers. Registration answers "Username already exists", which confirms which usernames exist. | `main.py:26-56` |
@@ -111,7 +111,7 @@ data loss or an exploitable hole, **Medium** = misleading or fragile, **Low** = 
 | :-- | :-- | :-- | :-- |
 | D1 | High | **The schema has no integrity.** `registrations` has no primary key, no foreign keys, no unique constraint and no timestamps. `events` has no capacity. `users` is keyed by a free-text username, compared case-sensitively. | `main.py:15-17`; `test_registrations_have_no_keys_or_constraints` |
 | D2 | Low | **Money is a bare integer with no currency.** The UI hardcodes the rupee sign. | `main.py:16`, templates |
-| D3 | Low | **The committed data is junk.** Three registrations belong to an empty username, and there are duplicate events. | `fest.db` |
+| D3 | Low | **The lab copy's data is junk.** Three registrations belong to an empty username, and there are duplicate events. | `fest.db` |
 
 ### 5.4 Repository hygiene
 
@@ -163,8 +163,8 @@ pinned in `tests/characterization/` against `legacy/v1/`.
 | :-- | :-- | :-- |
 | S1 | Fixed | Argon2id hashes (`test_password_is_hashed_with_argon2id`) |
 | S2 | Fixed | Server-side sessions, `POST` for writes, CSRF tokens, `?user=` ignored (`test_anonymous_visitors_are_sent_to_sign_in_not_to_a_registration`, `test_the_user_query_parameter_no_longer_means_anything`) |
-| S3 | **Open, your call** | The SRN is still at `main.py` line 8-ish, untouched, until you decide. The username/password row is gone from the working tree, but still exists in git history (history is not rewritten) |
-| S4 | Fixed | `fest.db` removed from the tree and `*.db` ignored. The file remains in history at `1f57f1a` |
+| S3 | **Open, your call** | The SRN is still at `main.py` line 8-ish, untouched, until you decide. The username/password row existed only in the lab folder's `fest.db`, which is no longer in the tree |
+| S4 | Fixed | `*.db` is ignored and the database file is no longer in the project folder. It never reached GitHub's `main` |
 | S5 | Fixed | Error pages show a request ID, never exception text (`test_errors_do_not_show_exception_text`) |
 | S6 | Fixed | Username and password rules (`test_empty_and_malformed_credentials_are_rejected`) |
 | S7 | Partly fixed | Login throttling per (username, client), CSRF and security headers are in. Sign-up still says when a username is taken, which is a usability trade-off |
@@ -186,5 +186,5 @@ pinned in `tests/characterization/` against `legacy/v1/`.
 | A15 | Fixed | Lab instructions removed from the UI |
 | D1 | Fixed | Keys, foreign keys, uniqueness, capacity (`test_the_database_refuses_orphans_and_duplicates`) |
 | D2 | Open (low) | Fees stay whole rupees as an integer; documented in the schema |
-| D3 | Fixed | The committed database is gone |
+| D3 | Fixed | The lab copy's database is no longer in the project folder |
 | H1-H5 | Fixed | README, MIT license, tests, lint, types, CI and Dependabot, `locust` moved to dev dependencies, `.gitignore` extended |

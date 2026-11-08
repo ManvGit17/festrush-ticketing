@@ -109,7 +109,7 @@ characterization test.
 - `pyproject.toml` with pinned, locked dependencies (uv); the app moved into a `src/` package with
   modules for identity, catalog and orders; typed settings from environment variables.
 - Passwords hashed (S1); server-side sessions, CSRF protection, writes through `POST` (S2);
-  input validation (S6); generic error pages (S5); `fest.db` removed from tracking and ignored (S4);
+  input validation (S6); generic error pages (S5); `*.db` ignored so a database can't be committed (S4);
   SRN handled per your answer to decision 2 (S3); bare `except:` replaced by specific handling (A2).
 - PostgreSQL 18 schema with keys, foreign keys, uniqueness and a capacity column (D1, A4, A5, A6),
   numbered migrations, an idempotent seed script (A8) and a seeded dataset.
@@ -213,7 +213,7 @@ These are yours to make before I start building. Defaults are my recommendation.
 2. **The SRN in `main.py` (`PES1UG23CS349`).** It is unused by the code. Options: keep it exactly
    where it is; move it into configuration (`FEST_SRN`) and show it in the page footer; or remove
    it. _Default:_ I do not touch it until you answer. Note it is also the username and password
-   in the committed `fest.db`, which I will remove from the repository regardless.
+   in the lab folder's `fest.db`, which is not on GitHub and which I removed from the working tree.
 3. **License.** _Default:_ MIT, as in the previous project. (None exists today.)
 4. **Front end.** Replace the Jinja pages with a React and TypeScript app (phase 4)? This is a
    framework change. _Default:_ yes; phase 1 keeps and secures the Jinja pages, so v1's
