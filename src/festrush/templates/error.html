@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <p class="code">{{ status }}</p>
+  <h1>{{ title }}</h1>
+  {% if message %}<p>{{ message }}</p>{% endif %}
+  {% if request_id %}<p class="muted">Request ID: <code>{{ request_id }}</code></p>{% endif %}
+  <p><a class="btn" href="/events">Back to events</a></p>
+</section>
+{% endblock %}

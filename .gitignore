@@ -3,3 +3,14 @@ __pycache__/
 *.pyc
 .vscode/
 .idea/
+*.db
+*.sqlite3
+.env
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+bench/results/*.tmp
+node_modules/

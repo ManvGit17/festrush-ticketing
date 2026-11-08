@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}FestRush{% endblock %} · FestRush</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="bar">
+    <div class="wrap bar-inner">
+      <a class="brand" href="/events" aria-label="FestRush, home">
+        <span class="mark" aria-hidden="true">FR</span>
+        <span>FestRush</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        {% if user %}
+          <span class="who">Signed in as <b>{{ user.username }}</b></span>
+          <a href="/events">Events</a>
+          <a href="/my-events">My events</a>
+          <a href="/checkout">Checkout</a>
+          <form method="post" action="/logout" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="link">Sign out</button>
+          </form>
+        {% else %}
+          <a href="/events">Events</a>
+          <a href="/login">Sign in</a>
+          <a class="btn small" href="/register">Create account</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="wrap foot">FestRush · a college-fest ticketing project</footer>
+</body>
+</html>
