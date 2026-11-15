@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # --- build: resolve dependencies from the lockfile into a virtualenv ----------------------------
-FROM python:3.13-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-default-groups
 
 # --- bench: the app plus the load-test tooling, for `docker compose --profile bench run bench` -----
-FROM python:3.13-slim AS bench
+FROM python:3.15-slim AS bench
 RUN apt-get update && apt-get install -y --no-install-recommends nginx-light \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
@@ -35,7 +35,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT ["python", "bench/run.py"]
 
 # --- runtime: the virtualenv, the package and the migrations ------------------------------------
-FROM python:3.13-slim
+FROM python:3.15-slim
 RUN useradd --create-home --uid 10001 festrush
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
